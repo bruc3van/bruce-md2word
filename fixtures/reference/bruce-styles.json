@@ -1,0 +1,454 @@
+{
+  "revision": "5bcfa6d170debb7d36580c2ab833c506459dca67",
+  "styles": {
+    "default": {
+      "document": {
+        "run": {
+          "font": "SimSun",
+          "size": 24
+        },
+        "paragraph": {
+          "spacing": {
+            "line": 360
+          },
+          "indent": {
+            "firstLine": 480
+          }
+        }
+      }
+    },
+    "paragraphStyles": [
+      {
+        "id": "Heading1",
+        "name": "Heading 1",
+        "basedOn": "Normal",
+        "next": "Normal",
+        "run": {
+          "font": "SimHei",
+          "size": 44,
+          "bold": true,
+          "color": "000000"
+        },
+        "paragraph": {
+          "alignment": "center",
+          "spacing": {
+            "before": 360,
+            "after": 240,
+            "line": 240
+          },
+          "indent": {
+            "firstLine": 0
+          }
+        }
+      },
+      {
+        "id": "Heading2",
+        "name": "Heading 2",
+        "basedOn": "Normal",
+        "next": "Normal",
+        "run": {
+          "font": "SimHei",
+          "size": 32,
+          "bold": true,
+          "color": "000000"
+        },
+        "paragraph": {
+          "spacing": {
+            "before": 360,
+            "after": 200,
+            "line": 240
+          },
+          "indent": {
+            "firstLine": 0
+          }
+        }
+      },
+      {
+        "id": "Heading3",
+        "name": "Heading 3",
+        "basedOn": "Normal",
+        "next": "Normal",
+        "run": {
+          "font": "SimHei",
+          "size": 30,
+          "bold": true,
+          "color": "000000"
+        },
+        "paragraph": {
+          "spacing": {
+            "before": 300,
+            "after": 160,
+            "line": 240
+          },
+          "indent": {
+            "firstLine": 0
+          }
+        }
+      },
+      {
+        "id": "Heading4",
+        "name": "Heading 4",
+        "basedOn": "Normal",
+        "next": "Normal",
+        "run": {
+          "font": "SimHei",
+          "size": 28,
+          "bold": true,
+          "color": "000000"
+        },
+        "paragraph": {
+          "spacing": {
+            "before": 240,
+            "after": 120,
+            "line": 240
+          },
+          "indent": {
+            "firstLine": 0
+          }
+        }
+      },
+      {
+        "id": "Heading5",
+        "name": "Heading 5",
+        "basedOn": "Normal",
+        "next": "Normal",
+        "run": {
+          "font": "SimHei",
+          "size": 26,
+          "bold": true,
+          "color": "000000"
+        },
+        "paragraph": {
+          "spacing": {
+            "before": 200,
+            "after": 100,
+            "line": 240
+          },
+          "indent": {
+            "firstLine": 0
+          }
+        }
+      },
+      {
+        "id": "Heading6",
+        "name": "Heading 6",
+        "basedOn": "Normal",
+        "next": "Normal",
+        "run": {
+          "font": "SimHei",
+          "size": 24,
+          "bold": true,
+          "color": "6B7280"
+        },
+        "paragraph": {
+          "spacing": {
+            "before": 160,
+            "after": 80,
+            "line": 240
+          },
+          "indent": {
+            "firstLine": 0
+          }
+        }
+      },
+      {
+        "id": "CodeBlock",
+        "name": "Code Block",
+        "basedOn": "Normal",
+        "next": "Normal",
+        "run": {
+          "font": "Consolas",
+          "size": 22,
+          "color": "1F2937"
+        },
+        "paragraph": {
+          "shading": {
+            "fill": "F5F5F5"
+          },
+          "border": {
+            "top": {
+              "color": "D1D5DB",
+              "space": 1,
+              "style": "single",
+              "size": 4
+            },
+            "bottom": {
+              "color": "D1D5DB",
+              "space": 1,
+              "style": "single",
+              "size": 4
+            },
+            "left": {
+              "color": "D1D5DB",
+              "space": 1,
+              "style": "single",
+              "size": 4
+            },
+            "right": {
+              "color": "D1D5DB",
+              "space": 1,
+              "style": "single",
+              "size": 4
+            }
+          },
+          "spacing": {
+            "before": 240,
+            "after": 240,
+            "line": 300
+          },
+          "indent": {
+            "left": 240,
+            "right": 240,
+            "firstLine": 0
+          }
+        }
+      },
+      {
+        "id": "Quote",
+        "name": "Quote",
+        "basedOn": "Normal",
+        "next": "Normal",
+        "run": {
+          "color": "4B5563"
+        },
+        "paragraph": {
+          "shading": {
+            "fill": "F9FAFB"
+          },
+          "border": {
+            "left": {
+              "color": "6B7280",
+              "space": 1,
+              "style": "single",
+              "size": 20
+            }
+          },
+          "spacing": {
+            "before": 240,
+            "after": 240
+          },
+          "indent": {
+            "left": 480,
+            "firstLine": 0
+          }
+        }
+      }
+    ],
+    "characterStyles": [
+      {
+        "id": "InlineCode",
+        "name": "Inline Code",
+        "basedOn": "DefaultParagraphFont",
+        "run": {
+          "font": "Consolas",
+          "size": 22,
+          "color": "DC2626",
+          "shading": {
+            "fill": "FEF2F2"
+          }
+        }
+      },
+      {
+        "id": "Strong",
+        "name": "Strong",
+        "basedOn": "DefaultParagraphFont",
+        "run": {
+          "bold": true
+        }
+      },
+      {
+        "id": "Emphasis",
+        "name": "Emphasis",
+        "basedOn": "DefaultParagraphFont",
+        "run": {
+          "italics": true
+        }
+      }
+    ]
+  },
+  "numbering": {
+    "config": [
+      {
+        "reference": "bullet-list",
+        "levels": [
+          {
+            "level": 0,
+            "format": "bullet",
+            "text": "•",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 720,
+                  "hanging": 360
+                }
+              }
+            }
+          },
+          {
+            "level": 1,
+            "format": "bullet",
+            "text": "○",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 1440,
+                  "hanging": 360
+                }
+              }
+            }
+          },
+          {
+            "level": 2,
+            "format": "bullet",
+            "text": "▪",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 2160,
+                  "hanging": 360
+                }
+              }
+            }
+          },
+          {
+            "level": 3,
+            "format": "bullet",
+            "text": "▫",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 2880,
+                  "hanging": 360
+                }
+              }
+            }
+          },
+          {
+            "level": 4,
+            "format": "bullet",
+            "text": "–",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 3600,
+                  "hanging": 360
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "reference": "numbered-list",
+        "levels": [
+          {
+            "level": 0,
+            "format": "decimal",
+            "text": "%1、",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 720,
+                  "hanging": 480
+                },
+                "tabStops": [
+                  {
+                    "type": "left",
+                    "position": 720
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "level": 1,
+            "format": "decimal",
+            "text": "（%2）",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 1440,
+                  "hanging": 720
+                },
+                "tabStops": [
+                  {
+                    "type": "left",
+                    "position": 1440
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "level": 2,
+            "format": "lowerLetter",
+            "text": "%3)",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 2160,
+                  "hanging": 420
+                },
+                "tabStops": [
+                  {
+                    "type": "left",
+                    "position": 2160
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "level": 3,
+            "format": "decimal",
+            "text": "%4.",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 2880,
+                  "hanging": 420
+                },
+                "tabStops": [
+                  {
+                    "type": "left",
+                    "position": 2880
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "level": 4,
+            "format": "decimal",
+            "text": "%5.",
+            "alignment": "left",
+            "style": {
+              "paragraph": {
+                "indent": {
+                  "left": 3600,
+                  "hanging": 420
+                },
+                "tabStops": [
+                  {
+                    "type": "left",
+                    "position": 3600
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "html": "<h1>一级标题</h1><h2>二级标题</h2><h3>三级标题</h3><h4>四级标题</h4><h5>五级标题</h5><h6>六级标题</h6><p>中文 English 😀 <code>inline</code> <strong>粗体</strong> <em>斜体</em> <del>删除</del> <a href=\"https://example.com\">链接</a></p><pre><code>line one\n\nline three</code></pre><blockquote><p>引用一</p><p>引用二</p></blockquote><hr/><table><thead><tr><th>表头</th><th>第二列</th></tr></thead><tbody><tr><td>正文</td><td>内容</td></tr></tbody></table>"
+}

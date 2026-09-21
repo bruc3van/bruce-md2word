@@ -7,3 +7,7 @@ coverage/
 .env
 .env.*
 !.env.example
+
+lib/
+*.tgz
+output/

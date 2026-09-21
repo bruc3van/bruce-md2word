@@ -1,0 +1,44 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  check:
+    uses: ./.github/workflows/test.yml
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - name: Verify tag matches package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node --input-type=module -e 'import p from "./package.json" with {type:"json"}; if (process.env.TAG !== `v${p.version}`) process.exit(1)'
+      - run: npm pack
+      - name: Publish with npm Trusted Publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p 'require("./package.json").version')
+          # The first version may have been bootstrapped through npm web login.
+          if npm view "dsh-md2word@$version" version --registry=https://registry.npmjs.org 2>/dev/null | grep -Fx "$version"; then
+            echo "Version already published; skipping immutable npm version."
+          else
+            npm publish "dsh-md2word-$version.tgz" --access public --provenance
+          fi
+      - name: Create GitHub release with prebuilt package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" dsh-md2word-*.tgz --verify-tag --title "$TAG" --notes-file CHANGELOG.md

@@ -1,0 +1,77 @@
+import { Document, Packer } from 'docx';
+import { renderDiagram } from './mermaid.js';
+import sharp from 'sharp';
+import bmp from 'bmp-js';
+import type { Limits } from '../config.js';
+import { ExportError } from '../runtime/errors.js';
+import type { ParsedMarkdown } from './markdown.js';
+import { convertHTMLToDocx } from './html-to-docx.js';
+import type { EmbeddedImage } from './html-to-docx.js';
+import { createStyles, PAGE_WIDTH, PAGE_HEIGHT, MARGIN } from './styles.js';
+import type { Diagnostic } from './diagnostics.js';
+export interface AcquiredImage { id: string; data: Uint8Array }
+export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], warnings: Diagnostic[], limits: Limits): Promise<{ data: Uint8Array; warnings: Diagnostic[] }> {
+  for (const warning of warnings) parsed.diagnostics.add(warning.code, warning.message, warning.severity, warning.line);
+  const images = new Map<string, EmbeddedImage>();
+  let normalizedBytes = 0;
+  for (const asset of assets) {
+    const ref = parsed.images.find(image => image.id === asset.id);
+    if (!ref) throw new ExportError('Unknown image in worker response.', 'CONVERSION_FAILED');
+    try {
+      const input = Buffer.from(asset.data);
+      let data: Buffer;
+      let width: number;
+      let height: number;
+      if (input.subarray(0, 2).toString() === 'BM') {
+        if (input.length < 54 || input.readUInt32LE(14) !== 40 || input.readUInt32LE(30) !== 0 || ![24, 32].includes(input.readUInt16LE(28))) throw new Error('Unsupported BMP encoding');
+        width = input.readInt32LE(18); height = Math.abs(input.readInt32LE(22));
+        checkDimensions(width, height, limits);
+        const row = Math.ceil(width * input.readUInt16LE(28) / 32) * 4;
+        if (input.readUInt32LE(10) + row * height > input.length) throw new Error('Truncated BMP');
+        const decoded = bmp.decode(input);
+        const rgba = Buffer.alloc(decoded.data.length);
+        for (let i = 0; i < rgba.length; i += 4) { rgba[i] = decoded.data[i + 3]; rgba[i + 1] = decoded.data[i + 2]; rgba[i + 2] = decoded.data[i + 1]; rgba[i + 3] = 255; }
+        data = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+      } else {
+        const decoder = sharp(input, { failOn: 'warning', limitInputPixels: limits.maxImagePixels });
+        const meta = await sharp(input, { limitInputPixels: false }).metadata();
+        if (!['png', 'jpeg', 'gif'].includes(meta.format ?? '')) throw new Error('Unsupported image format');
+        checkDimensions(meta.width, meta.height, limits);
+        const normalized = await decoder.rotate().png().toBuffer({ resolveWithObject: true });
+        data = normalized.data; width = normalized.info.width; height = normalized.info.height;
+        if ((meta.pages ?? 1) > 1) parsed.diagnostics.add('IMAGE_FIRST_FRAME', 'Only the first frame of an animated image is included.', 'degradation', ref.line);
+      }
+      if (data.byteLength > limits.maxImageBytes) throw new ExportError('Decoded image exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
+      normalizedBytes += data.byteLength;
+      if (normalizedBytes > limits.maxTotalImageBytes) throw new ExportError('Normalized images exceed the aggregate byte limit.', 'LIMIT_EXCEEDED');
+      images.set(asset.id, { data, type: 'png', width, height });
+    } catch (error) {
+      if (error instanceof ExportError) throw error;
+      parsed.diagnostics.add('IMAGE_UNAVAILABLE', 'Unsupported or damaged image; alternative text retained.', 'degradation', ref.line);
+    }
+  }
+  let html = parsed.html;
+  for (const diagram of parsed.diagrams) {
+    try {
+      const image = await renderDiagram(diagram.source, limits);
+      normalizedBytes += image.data.byteLength;
+      if (normalizedBytes > limits.maxTotalImageBytes) throw new ExportError('Images and diagrams exceed the aggregate byte limit.', 'LIMIT_EXCEEDED');
+      if (image.minTextPt > 0 && image.minTextPt < 8) parsed.diagnostics.add('MERMAID_SMALL_TEXT', `图表缩放后最小字号约 ${image.minTextPt.toFixed(1)} pt，低于建议的 8 pt；请拆分图表、简化标签或调整布局。`, 'info', diagram.line);
+      images.set(diagram.id, image);
+      html = html.replace(new RegExp(`<pre data-mermaid="${diagram.id}">[\\s\\S]*?</pre>`), `<img src="${diagram.id}" alt="Mermaid 图表"/>`);
+    } catch (error) {
+      if (error instanceof ExportError) throw error;
+      html = html.replace(`<pre data-mermaid="${diagram.id}">`, `<p data-mermaid-notice="true">Mermaid 图表未渲染${diagram.line ? `（源文件第 ${diagram.line} 行）` : ''}：当前渲染器不支持该语法或渲染失败，以下保留原始代码。</p><pre>`);
+      parsed.diagnostics.add('MERMAID_NOT_RENDERED', 'Mermaid syntax or rendering is unsupported; source retained as code.', 'degradation', diagram.line);
+    }
+  }
+  const { children, numbering } = convertHTMLToDocx(html, images, parsed.diagnostics);
+  const document = new Document({ styles: createStyles(), numbering, sections: [{ properties: { page: { size: { width: PAGE_WIDTH, height: PAGE_HEIGHT }, margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } }, children }] });
+  const data = await Packer.toBuffer(document);
+  if (data.byteLength > limits.maxOutputBytes) throw new ExportError('DOCX exceeds the configured output limit.', 'LIMIT_EXCEEDED');
+  return { data, warnings: parsed.diagnostics.items };
+}
+function checkDimensions(width: number, height: number, limits: Limits): void {
+  if (!(width > 0 && height > 0)) throw new Error('Invalid dimensions');
+  if (width > limits.maxImageDimension || height > limits.maxImageDimension || width * height > limits.maxImagePixels) throw new ExportError('Image dimensions exceed the configured limit.', 'LIMIT_EXCEEDED');
+}
