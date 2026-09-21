@@ -4,13 +4,18 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 const root = process.cwd();
+// npm run supplies the actual npm JS entry point on every OS, avoiding .cmd
+// shims and shell quoting on Windows (including paths containing spaces).
+const npmCli = process.env.npm_execpath;
+if (!npmCli) throw new Error('Run this check with npm run test:pack');
+const npm = (args, options) => execFileSync(process.execPath, [npmCli, ...args], options);
 const temp = await mkdtemp(path.join(os.tmpdir(), 'md2word-pack-'));
 let tarball;
 try {
-  const manifest = JSON.parse(execFileSync('npm', ['pack', '--json'], { encoding: 'utf8', cwd: root }));
+  const manifest = JSON.parse(npm(['pack', '--json'], { encoding: 'utf8', cwd: root }));
   tarball = path.join(root, manifest[0].filename);
   await writeFile(path.join(temp, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-  execFileSync('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', tarball, '@deepseek-ai/dsh-fs-local@0.1.6-alpha.2', '@deepseek-ai/dsh-attachment-local@0.1.6-alpha.2', '@deepseek-ai/dsh-subprocess-local@0.1.6-alpha.2', `@deepseek-ai/dsh-${process.platform === 'win32' ? 'pwsh' : 'bash'}-local@0.1.6-alpha.2`], { cwd: temp, stdio: 'inherit' });
+  npm(['install', '--ignore-scripts', '--no-audit', '--no-fund', tarball, '@deepseek-ai/dsh-fs-local@0.1.6-alpha.2', '@deepseek-ai/dsh-attachment-local@0.1.6-alpha.2', '@deepseek-ai/dsh-subprocess-local@0.1.6-alpha.2', `@deepseek-ai/dsh-${process.platform === 'win32' ? 'pwsh' : 'bash'}-local@0.1.6-alpha.2`], { cwd: temp, stdio: 'inherit' });
   await writeFile(path.join(temp, 'smoke.mjs'), `
 import assert from 'node:assert/strict';
 import { Context } from '@deepseek-ai/cordis';
