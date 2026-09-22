@@ -31,6 +31,61 @@ Agent 可以导出已有 Markdown 文件，也可以直接传入生成的正文�
 
 安装依赖后，转换在本地完成，无需 Office、Python、浏览器或在线转换服务。默认保存到当前项目的 `output/`，同名文件自动编号。
 
+## 安全与隐私
+
+**默认 CLI 和 DSH 项目模式在运行它们的机器上完成转换，不将文档上传到在线转换服务，不调用大模型 API，也不需要 API Key。** 如果你使用云端 Agent，这台机器可能是其远程运行环境；Agent 在生成或读取文档时的数据处理规则由所用平台决定。
+
+| 关注点 | 当前实现 |
+| --- | --- |
+| 何时联网 | 安装 Skill、安装依赖和检查或更新 CLI 时会访问 GitHub、npm 等对应的软件源；依赖就绪后的转换过程无需联网。本项目转换代码未集成遥测或使用情况上报。 |
+| 读取哪些文件 | 读取指定的 Markdown，以及文档图片目录内的相对路径图片或内嵌图片；不扫描整个磁盘。图片拒绝网络 URL、绝对路径、`file:` URI、目录穿越和指向目录外的符号链接。 |
+| 是否执行文档内容 | Markdown 代码块和原始 HTML 作为文档内容处理，不作为命令或脚本执行；Mermaid 与 LaTeX 通过本地解析器转换。`jsdom` 未启用脚本执行或远程资源加载。 |
+| 是否覆盖原文件 | 不改写输入 Markdown；导出同名 DOCX 时自动编号。CLI 先完成临时文件写入，再以不覆盖的方式发布最终文件，并拒绝符号链接输出目录。 |
+| 是否有资源限制 | 默认 Markdown 上限 5 MiB、单图 20 MiB、累计图片 100 MiB、图片数 100、输出 100 MiB、任务超时 120 秒；还有限定图片像素和公式复杂度的检查。超限返回错误，支持取消任务。 |
+| 内容缺失如何处理 | 返回结构化警告；`--strict` 拒绝保存检测到内容降级的文档。严格模式检查的是转换完整性，不是恶意内容扫描或事实核验。 |
+
+DSH 项目模式通过宿主执行器运行 CLI，正文和文件参数以标准输入 JSON 传递，不拼接为 shell 命令，并传递宿主的沙箱策略；沙箱执行失败时不会自动退回无沙箱执行。独立 CLI 的文件检查和转换 worker 不等于操作系统级沙箱，实际权限取决于运行账号和宿主配置。DSH 附件模式则由宿主附件服务决定存储与交付位置。
+
+Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，会指导 Agent 安装或更新 CLI；它不会绕过宿主的权限审批，也不替代 Agent 平台自身的数据与执行策略。源码、[依赖清单](package.json)、[锁文件](package-lock.json)和[自动化检查](https://github.com/bruc3van/bruce-md2word/actions)均可查看。这些措施便于核查实现，但不表示经过独立安全认证或不存在第三方依赖风险。
+
+## 运行环境与依赖
+
+使用 CLI 需要 **Node.js 24（`>=24 <25`）和 npm 或兼容的包管理器**。中文图表需要运行机器安装中文字体。无需安装 Word、LibreOffice、Pandoc、Python、Chromium 或单独的 Mermaid CLI；Word 仅用于打开、编辑或人工检查生成的文档。
+
+<details>
+<summary>转换依赖及用途</summary>
+
+以下为当前源码锁定的直接转换与配置依赖；安装时由包管理器解析安装，无需逐项手动准备。
+
+| 依赖 | 版本 | 用途 |
+| --- | --- | --- |
+| `markdown-it` | `14.1.1` | 解析 Markdown 结构；关闭原始 HTML 渲染、自动链接识别和 typographer。 |
+| `docx` | `9.7.1` | 生成 Word 文档、样式、表格和原生数学公式。 |
+| `temml` | `0.13.5` | 将 LaTeX 解析为 MathML，再由本项目转换为 Word 原生公式。 |
+| `jsdom` | `27.4.0` | 在本地解析 HTML、XML、MathML 和生成的 SVG；不启动浏览器。 |
+| `sharp` | `0.35.4` | 解码和处理图片，将生成的图表栅格化为 PNG；包含平台相关原生依赖。 |
+| `bmp-js` | `0.1.0` | 解码支持的 BMP 图片。 |
+| `jszip` | `3.10.1` | 检查 DOCX 压缩包结构及内部资源。 |
+| `@deepseek-ai/schemastery` | `3.18.2` | 定义配置与参数校验 Schema。 |
+| `beautiful-mermaid` | `1.1.3` | Mermaid 图表布局与 SVG 生成；经本项目适配后在构建时打包，用户无需另装。 |
+
+`beautiful-mermaid` 虽列于开发依赖，其渲染代码及相关依赖会随安装包内置。CLI 所需的部分 DSH 文件访问和运行辅助代码也在构建时打包；独立使用不要求启动 DSH 服务。`sharp` 的平台原生包及其他传递依赖会出现在安装清单中，具体以包管理器解析结果为准。
+
+DSH 插件另外依赖宿主的 Cordis、工具、文件和执行器服务：当前声明 Cordis `4.0.2`，DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`。默认项目模式需要 `tools` 与 `shell`；附件模式需要 `fs` 和 `attachments`；`skills` 服务可选。依赖中的 `dsh-llm` 用于宿主类型与错误接口，不代表转换过程调用模型。完整声明见 [package.json](package.json)，运行条件见 [Agent 参考](docs/agent-reference.md#环境与工具注册)。
+
+从源码构建还使用 TypeScript、esbuild、类型声明和 DSH 本地测试服务。直接安装已发布 npm 包无需手动配置这些开发工具。本项目采用 MIT 许可证；第三方代码保留各自许可证，来源见 [NOTICE](NOTICE)，打包组件的许可证随包存放于 `lib/CLI-LICENSES.txt` 和 `lib/MERMAID-LICENSES.txt`。
+
+</details>
+
+<details>
+<summary>依赖安全检查</summary>
+
+锁定版本用于复现构建，不代表依赖永远没有漏洞。可在源码目录执行 `npm audit --omit=dev` 查看当前运行依赖报告。
+
+2026-09-22 检查记录：`markdown-it 14.1.1` 有一项 smartquotes 规则的中等级别拒绝服务告警（[GHSA-6v5v-wf23-fmfq](https://github.com/advisories/GHSA-6v5v-wf23-fmfq)）。本项目在 [解析器配置](src/core/markdown.ts) 中显式设置 `typographer: false`，未启用公告所述触发规则；依赖本身仍在受影响版本范围内，不能据此宣称审计无告警。后续版本与新增公告以实时审计结果为准。
+
+</details>
+
 ## 选择安装方式
 
 通用 Agent 选择 Skill + CLI；DSH 用户选择插件。两种方式复用同一转换引擎，无需同时安装。
