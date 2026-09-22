@@ -4,7 +4,7 @@
 
 ## 发布步骤
 
-1. 在 Node.js 24 下执行 `npm version <新版本> --no-git-tag-version`，同步更新两个包清单；同步 README 和 `skills/bruce-md2word/SKILL.md` 中的安装版本，将 `CHANGELOG.md` 的未发布条目归入新版本。
+1. 在 Node.js 24 下执行 `npm version <新版本> --no-git-tag-version`，同步更新两个包清单；同步 README 的安装版本，检查 `skills/bruce-md2word/SKILL.md` 的运行环境与命令是否仍适用，将 `CHANGELOG.md` 的未发布条目归入新版本。
 2. 执行 `npm ci`、`npm run typecheck`、`npm test`、`npm run test:pack`。
 3. 提交并推送 `main`，创建与包版本一致的 `vX.Y.Z` tag 并推送。tag 必须指向包含版本变更的提交。
 4. 确认 Release 工作流成功，GitHub Release 已公开且包含 `.tgz`，npm 新版本及 `latest` 已更新。

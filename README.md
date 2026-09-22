@@ -51,7 +51,9 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 
 默认安装到当前项目；添加 `-g` 可安装到用户级目录，添加 `-a <agent>` 可指定目标 Agent。安装后按目标 Agent 的方式重新加载技能。
 
-**安装 Skill 不会自动安装转换 CLI。** 请在 Node.js 24 环境中另行安装：
+`npx skills` 负责安装 Skill 文件。首次使用时，Agent 会按 Skill 检查 CLI，缺失时安装，版本落后时更新，然后继续导出；用户指定版本或项目锁定版本会被保留。需要 Node.js 24 和相应的命令执行权限。
+
+如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
 npm install -g bruce-md2word@0.3.0
@@ -59,7 +61,7 @@ npm install -g bruce-md2word@0.3.0
 
 也可以直接让 Agent 帮你完成：
 
-> 请检查 Node.js 24，使用 npx skills add bruc3van/bruce-md2word --skill bruce-md2word 安装到当前 Agent 的项目技能目录，并安装 bruce-md2word@0.3.0 CLI。然后将 docs/报告.md 严格导出为 Word，返回真实路径和警告。
+> 请使用 npx skills add bruc3van/bruce-md2word --skill bruce-md2word 安装到当前 Agent 的项目技能目录，再按 Skill 完成环境检查和 CLI 准备，将 docs/报告.md 严格导出为 Word，返回真实路径和警告。
 
 需要手动安装时，将源码或 npm 包中的整个 `skills/bruce-md2word/` 目录复制到目标 Agent 的技能目录，保留 `SKILL.md` 和 `references/`。不同 Agent 的技能目录和发现机制以其配置为准；不支持自动发现 Skill 的 Agent，可将其作为项目指令读取。安装器识别成功不代表已逐一验证所有 Agent 的实际调用。
 

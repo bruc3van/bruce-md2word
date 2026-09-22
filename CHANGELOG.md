@@ -1,5 +1,7 @@
 # 未发布
 
+- Skill 在首次使用时检查 CLI 的安装与版本，按需安装或更新后继续导出，并尊重指定版本、项目锁定版本和离线要求。
+
 - GitHub 仓库统一为 `bruc3van/bruce-md2word`，同步仓库链接与 npm 发布配置；README 并列呈现Skill + CLI 和 DSH 插件入口。
 
 # v0.3.0
