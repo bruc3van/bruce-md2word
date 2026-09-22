@@ -5,6 +5,7 @@ import type { Limits } from '../config.js';
 import { Diagnostics } from './diagnostics.js';
 import { ExportError } from '../runtime/errors.js';
 import { installMathRules } from './math-markdown.js';
+import { installDocumentRules } from './document-rules.js';
 export interface ImageReference { id: string; src: string; alt: string; line?: number }
 export interface DiagramReference { id: string; source: string; line?: number }
 export interface FormulaReference { id: string; source: string; raw: string; display: boolean; unclosed: boolean; line?: number }
@@ -16,22 +17,7 @@ export function parseMarkdown(markdown: string, limits: Limits): ParsedMarkdown 
   const safeLink = parser.validateLink.bind(parser);
   parser.validateLink = value => /^(?:data:image\/|file:)/i.test(value) || safeLink(value);
   const diagnostics = new Diagnostics(limits.maxDiagnostics);
-  // Footnote definitions otherwise become reference links and disappear from
-  // visible text. Keep unsupported definitions literal, including their bodies.
-  const referenceRule = parser.block.ruler.getRules('').find(rule => rule.name === 'reference');
-  if (!referenceRule) throw new Error('Missing Markdown reference rule');
-  const footnoteLines = new Set<number>();
-  parser.block.ruler.at('reference', (state, start, end, silent) => {
-    const line = state.src.slice(state.bMarks[start] + state.tShift[start], state.eMarks[start]);
-    if (/^\[\^[^\]\n]+\]:/.test(line)) {
-      if (!silent && !footnoteLines.has(start)) {
-        footnoteLines.add(start);
-        diagnostics.add('FOOTNOTE_NOT_CONVERTED', 'Footnotes are not converted to native Word footnotes; definition and reference text retained.', 'degradation', start + 1);
-      }
-      return false;
-    }
-    return referenceRule(state, start, end, silent);
-  });
+  installDocumentRules(parser, diagnostics);
   const images: ImageReference[] = [];
   const diagrams: DiagramReference[] = [];
   const formulas: FormulaReference[] = [];
@@ -47,6 +33,7 @@ export function parseMarkdown(markdown: string, limits: Limits): ParsedMarkdown 
     for (const token of items) {
       if (token.map) currentLine = token.map[0] + 1;
       const line = currentLine === undefined ? undefined : currentLine + (token.meta?.lineOffset ?? 0);
+      if (token.type === 'footnote_missing') diagnostics.add('FOOTNOTE_UNDEFINED', 'Undefined footnote reference retained as text.', 'degradation', line);
       if (token.type === 'math_inline' || token.type === 'math_block') {
         if (formulas.length >= 1000) throw new ExportError('Formula count exceeds 1000.', 'LIMIT_EXCEEDED');
         const id = `math-${formulas.length}`;
@@ -64,6 +51,11 @@ export function parseMarkdown(markdown: string, limits: Limits): ParsedMarkdown 
         // markdown-it's renderInlineAsText otherwise drops custom math tokens.
         for (const child of token.children ?? []) {
           if (child.type === 'math_inline') { child.type = 'text'; child.content = child.meta.raw; }
+          if (child.type === 'footnote_missing') {
+            diagnostics.add('FOOTNOTE_UNDEFINED', 'Undefined footnote reference retained in image alternative text.', 'degradation', line);
+            child.type = 'text';
+          }
+          if (child.type === 'footnote_ref') { child.type = 'text'; child.content = `[^${child.meta.label}]`; }
         }
         if (images.length + diagrams.length >= limits.maxImages) throw new ExportError('Image count exceeds the configured limit.', 'LIMIT_EXCEEDED');
         const id = `image-${images.length}`;

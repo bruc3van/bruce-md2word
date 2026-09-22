@@ -25,3 +25,10 @@ bruce-md2word "docs/报告.md" -o "output/项目报告-诊断.docx"
 | `CONFIGURATION_ERROR` / `CONVERSION_FAILED` | 保留实际错误，检查环境或依赖；无法定位时报告失败，不伪造产物路径。 |
 
 `severity: degradation` 会使严格模式失败；`severity: info` 不会。对于未知代码仍读取其消息和严重级别，不把未知警告忽略成成功无警告。
+
+
+## 排版与脚注
+
+表格按内容估算列宽，短行尽量不拆页。`<!-- word:table widths=1,1,4 -->` 指定下一表格列宽比例。`<!-- word:list id=steps continue -->` 续接此前同名列表，`restart` 创建新实例。`<!-- word:numbering section=2 -->` 在二级标题范围内续接顶层列表、跨节重启；`source` 恢复独立列表。`<!-- word:caption -->` 标记紧邻图片/表格的题注。错误或错位指令产生 `LAYOUT_DIRECTIVE_INVALID`；不可用的续接产生 `LIST_CONTINUATION_UNAVAILABLE`。
+
+命名脚注支持 `[^id]` 与多段定义。`FOOTNOTE_UNDEFINED`、`FOOTNOTE_DUPLICATE`、`FOOTNOTE_NESTED`、`FOOTNOTE_TABLE_FLATTENED` 为降级，严格模式拒绝保存；`FOOTNOTE_UNUSED` 是信息提示。重复脚注引用通过 Word NOTEREF 域显示，修改文档后需更新域。不要自动删除脚注正文来让严格模式通过。

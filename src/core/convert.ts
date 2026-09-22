@@ -77,8 +77,8 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
       formulas.set(formula.id, [new TextRun({ text: '[公式未转换] ', color: '92400E' }), ...formula.raw.split('\n').map((text, i) => new TextRun({ text, ...(i ? { break: 1 } : {}), font: 'Consolas' }))]);
     }
   }
-  const { children, numbering } = convertHTMLToDocx(html, images, parsed.diagnostics, formulas);
-  const document = new Document({ styles: createStyles(), numbering, sections: [{ properties: { page: { size: { width: PAGE_WIDTH, height: PAGE_HEIGHT }, margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } }, children }] });
+  const { children, numbering, footnotes } = convertHTMLToDocx(html, images, parsed.diagnostics, formulas);
+  const document = new Document({ styles: createStyles(), numbering, footnotes, features: { updateFields: true }, sections: [{ properties: { page: { size: { width: PAGE_WIDTH, height: PAGE_HEIGHT }, margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } }, children }] });
   const data = await Packer.toBuffer(document);
   if (data.byteLength > limits.maxOutputBytes) throw new ExportError('DOCX exceeds the configured output limit.', 'LIMIT_EXCEEDED');
   return { data, warnings: parsed.diagnostics.items };

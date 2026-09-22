@@ -175,11 +175,15 @@ test('internal links target unique heading bookmarks, including Chinese and dupl
   assert.equal(missing.warnings[0].code, 'LINK_UNAVAILABLE');
 });
 
-test('unsupported footnotes retain definition text, warn with source line, and leave code and normal references alone', async () => {
-  const result = await document('说明[^1]\n\n[^1]: 脚注内容\n    第二行\n\n[normal][ref]\n\n[ref]: https://example.com\n\n```txt\n[^2]: code\n```');
-  for (const text of ['说明[^1]', '[^1]: 脚注内容', '第二行', '[^2]: code']) assert.ok(result.xml.includes(text), text);
-  assert.deepEqual(result.warnings.map(w => [w.code, w.line]), [['FOOTNOTE_NOT_CONVERTED', 3]]);
-  assert.match(await result.zip.file('word/_rels/document.xml.rels').async('string'), /https:\/\/example.com/);
+test('native footnotes keep multiple paragraphs and leave code and ordinary references alone', async () => {
+  const result = await document('说明[^1]\n\n[^1]: 脚注内容\n\n    第二段\n\n[normal][ref]\n\n[ref]: https://example.com\n\n```txt\n[^2]: code\n```');
+  assert.match(result.xml, /w:footnoteReference/);
+  assert.ok(result.xml.includes('[^2]: code'));
+  assert.doesNotMatch(result.xml, /脚注内容/);
+  const footnotes = await result.zip.file('word/footnotes.xml').async('string');
+  assert.match(footnotes, /脚注内容/); assert.match(footnotes, /第二段/);
+  assert.deepEqual(result.warnings, []);
+  assert.match(await result.zip.file('word\/_rels\/document.xml.rels').async('string'), /https:\/\/example.com/);
 });
 
 test('list text, continuation paragraphs and nested blocks share a container without changing restart semantics', async () => {

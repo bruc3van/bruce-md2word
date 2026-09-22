@@ -21,7 +21,7 @@ test('all style definitions and five-level numbering retain the pinned Bruce def
   assert.equal(styles.paragraphStyles.find(s => s.id === 'BodyText').paragraph.indent.firstLine, 480);
   const legacy = structuredClone(styles);
   legacy.default.document.paragraph.indent.firstLine = 480;
-  legacy.paragraphStyles = legacy.paragraphStyles.filter(s => s.id !== 'BodyText');
+  legacy.paragraphStyles = legacy.paragraphStyles.filter(s => !['BodyText', 'Caption', 'FootnoteText'].includes(s.id));
   assert.deepEqual(legacy, reference.styles);
   assert.deepEqual(createNumbering(), reference.numbering);
   for (const [index, ordered] of [false, true].entries()) {

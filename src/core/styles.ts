@@ -35,6 +35,8 @@ export function createStyles(): IStylesOptions {
       }
     },
     paragraphStyles: [
+      { id: "Caption", name: "Caption", basedOn: "Normal", next: "BodyText", run: { size: 20 }, paragraph: { alignment: AlignmentType.CENTER, indent: { firstLine: 0 }, spacing: { before: 100, after: 100 } } },
+      { id: "FootnoteText", name: "Footnote Text", basedOn: "Normal", next: "FootnoteText", run: { size: 20 }, paragraph: { indent: { firstLine: 0 }, spacing: { line: 240, after: 80 } } },
       { id: "BodyText", name: "Body Text", basedOn: "Normal", next: "BodyText", paragraph: { indent: { firstLine: charsToTwips(2) } } },
       {
         id: "Heading1",
