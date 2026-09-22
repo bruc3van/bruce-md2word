@@ -45,6 +45,16 @@ test('Chinese fixtures for all six diagram types embed seven valid PNGs in DOCX'
   }
 });
 
+test('bundled renderer omits web fonts before raster adaptation', async () => {
+  const bundle = await readFile(new URL('../lib/core/mermaid-renderer.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(bundle, /fonts\.googleapis\.com/);
+  for (const source of ['graph LR\nA[中文] --> B[完成]', 'classDiagram\nclass User {\n+String name\n}']) {
+    const svg = renderMermaidSVG(source);
+    assert.doesNotMatch(svg, /@import|fonts\.googleapis\.com/);
+    assert.match(svg, /<text/);
+  }
+});
+
 test('SVG raster adapter preserves Chinese labels and resolves offline colors/fonts', () => {
   const svg = staticDiagramSvg(renderMermaidSVG('graph LR\nA[中文标签] --> B[English 混排]'));
   assert.match(svg, /中文标签/); assert.match(svg, /English 混排/);

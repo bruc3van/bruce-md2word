@@ -46,7 +46,7 @@ Agent 可以导出已有 Markdown 文件，也可以直接传入生成的正文�
 
 DSH 项目模式通过宿主执行器运行 CLI，正文和文件参数以标准输入 JSON 传递，不拼接为 shell 命令，并传递宿主的沙箱策略；沙箱执行失败时不会自动退回无沙箱执行。独立 CLI 的文件检查和转换 worker 不等于操作系统级沙箱，实际权限取决于运行账号和宿主配置。DSH 附件模式则由宿主附件服务决定存储与交付位置。
 
-Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，会指导 Agent 安装或更新 CLI；它不会绕过宿主的权限审批，也不替代 Agent 平台自身的数据与执行策略。源码、[依赖清单](package.json)、[锁文件](package-lock.json)和[自动化检查](https://github.com/bruc3van/bruce-md2word/actions)均可查看。这些措施便于核查实现，但不表示经过独立安全认证或不存在第三方依赖风险。
+Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，优先复用已有且符合宿主策略的可用 CLI；缺少可用版本或需要更新时，遵循宿主的安装审计、权限审批、包成熟期和构建授权规则，不自动追随 latest，也不自行添加安装豁免。它不替代 Agent 平台自身的数据与执行策略。源码、[依赖清单](package.json)、[锁文件](package-lock.json)和[自动化检查](https://github.com/bruc3van/bruce-md2word/actions)均可查看。这些措施便于核查实现，但不表示经过独立安全认证或不存在第三方依赖风险。
 
 ## 运行环境与依赖
 
@@ -111,7 +111,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.3.1
+npm install -g bruce-md2word@0.3.2
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -124,12 +124,12 @@ npm install -g bruce-md2word@0.3.1
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.3.1 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.3.2 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.3.1
+npm install -g bruce-md2word@0.3.2
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -152,13 +152,13 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 当前包要求 Node.js `>=24 <25`、DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`、Cordis `4.0.2`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.3.1
+dsh plugin --profile web add bruce-md2word@0.3.2
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.3.1
+npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.3.2
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。

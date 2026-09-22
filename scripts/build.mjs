@@ -12,6 +12,16 @@ const adaptRenderer = {
   name: 'mermaid-layout-adaptations',
   setup(plugin) {
     plugin.onResolve({ filter: /^beautiful-mermaid$/ }, () => ({ path: path.join(rendererRoot, 'src/index.ts') }));
+    plugin.onLoad({ filter: /beautiful-mermaid[/\\]src[/\\]theme\.ts$/ }, ({ path: file }) => {
+      let contents = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+      // Font resolution is local; omit the upstream web-font imports entirely.
+      const imports = /  const fontImports = \[\n[\s\S]*?\n  \]/g;
+      const matches = [...contents.matchAll(imports)];
+      if (matches.length !== 1 || !matches[0][0].includes('fonts.googleapis.com')) throw new Error(`Mermaid font patch target changed: ${file}`);
+      contents = contents.replace(imports, '  const fontImports: string[] = []');
+      if (contents.includes('fonts.googleapis.com')) throw new Error(`Unexpected Mermaid web font reference: ${file}`);
+      return { contents, loader: 'ts', resolveDir: path.dirname(file) };
+    });
     plugin.onLoad({ filter: /beautiful-mermaid[/\\]src[/\\]parser\.ts$/ }, ({ path: file }) => {
       let contents = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
       // The pinned state parser silently drops unmatched lines (including notes).
