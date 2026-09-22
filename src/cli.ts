@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import path from 'node:path';
-import { mkdir, realpath } from 'node:fs/promises';
+import { mkdir, readFile, realpath } from 'node:fs/promises';
 import { Context } from '@deepseek-ai/cordis';
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local';
 import { resolveConfig, defaults, type Config } from './config.js';
@@ -17,6 +17,7 @@ Convert UTF-8 Markdown to editable DOCX. '-' reads Markdown from stdin.
 Default output: ./output/<input-name>.docx (document.docx for stdin).
 Existing files are never overwritten; collisions add a numeric suffix.
 Success is reported as JSON on stdout; errors are JSON on stderr.
+--version, -v prints the package version and exits without converting.
 --request reads a versioned plugin request from stdin; it always saves in ./output/.
 Node.js 24 required. No Office, Python or external converter is needed.
 `;
@@ -56,9 +57,14 @@ function validateInput(value: unknown): WordExportInput {
 async function main(): Promise<void> {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
     output: { type: 'string', short: 'o' }, strict: { type: 'boolean' }, 'asset-base-dir': { type: 'string' },
-    help: { type: 'boolean', short: 'h' }, request: { type: 'boolean' },
+    help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, request: { type: 'boolean' },
   } });
   if (values.help) { process.stdout.write(help); return; }
+  if (values.version) {
+    const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    process.stdout.write(manifest.version + '\n');
+    return;
+  }
   const startedAt = Date.now();
   timer = setTimeout(() => controller.abort(new ExportError('Conversion deadline exceeded.', 'LIMIT_EXCEEDED')), defaults.timeoutMs);
   let input: WordExportInput;

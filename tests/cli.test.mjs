@@ -22,6 +22,22 @@ function run(cwd, args, input = '') {
   });
 }
 
+test('CLI version reports its own package from another cwd without converting', async () => {
+  const h = await harness();
+  try {
+    const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    await writeFile(path.join(h.root, 'package.json'), JSON.stringify({ version: '999.0.0' }));
+    const before = await readdir(h.root);
+    for (const args of [['--version'], ['-v'], ['--version', '--request']]) {
+      const result = await run(h.root, args, 'invalid request');
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(result.stdout, manifest.version + '\n');
+      assert.equal(result.stderr, '');
+    }
+    assert.deepEqual(await readdir(h.root), before);
+  } finally { await h.close(); }
+});
+
 test('standalone CLI reads stdin, writes a valid DOCX and never overwrites', async () => {
   const h = await harness();
   try {

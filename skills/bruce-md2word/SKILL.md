@@ -15,14 +15,14 @@ description: 使用本地 bruce-md2word CLI 将 Markdown 或新撰写的报告�
 
 ```sh
 node --version
-bruce-md2word --help
+bruce-md2word --version
 ```
 
 当前已验证的运行环境为 Node.js `>=24 <25`。Node.js 缺失或不满足所选版本的要求时，说明需要准备的环境，不反复重装 CLI，也不擅自切换系统默认 Node.js。
 
 - 命令不存在：先检查项目是否已安装该包，避免把不在 PATH 中误判为未安装。
-- 项目已有安装时，优先使用 `node "node_modules/bruce-md2word/lib/cli.js" --help`，后续命令也使用同一入口。
-- 当前 CLI 没有 `--version` 或 `--help-json`。按实际使用的安装位置读取版本：
+- 项目已有安装时，优先使用 `node "node_modules/bruce-md2word/lib/cli.js" --version`，后续命令也使用同一入口。
+- `--version`（简写 `-v`）成功时返回一行版本号。旧版 CLI（如已发布的 `0.3.0`）尚不支持此参数；若报未知选项，先用同一入口的 `--help` 确认可用，再按实际安装位置读取版本，不把未知选项误判为未安装：
 
   ```sh
   npm list bruce-md2word --depth=0 --json

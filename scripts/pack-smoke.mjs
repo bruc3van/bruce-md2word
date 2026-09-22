@@ -61,6 +61,8 @@ try {
   const { readFile } = await import('node:fs/promises');
   const installed = JSON.parse(await readFile(path.join(temp, 'node_modules', 'bruce-md2word', 'package.json'), 'utf8'));
   if (Object.keys(installed.bin).join() !== 'bruce-md2word' || installed.bin['bruce-md2word'] !== 'lib/cli.js') throw new Error('Unexpected CLI entry points');
+  const version = npm(['exec', '--offline', '--', 'bruce-md2word', '--version'], { cwd: temp, encoding: 'utf8' });
+  if (version !== installed.version + '\n') throw new Error('Packaged CLI version does not match the installed package');
   const result = JSON.parse(npm(['exec', '--offline', '--', 'bruce-md2word', '-', '--strict', '-o', 'packed.docx'], { cwd: temp, input: '# Packed CLI\n\n中文与 **bold** $x_i^2$\n\n~~~mermaid\ngraph TD\nA[中文请求]-->B[完成]\n~~~', encoding: 'utf8' }));
   if (result.protocol !== 1 || result.fileName !== 'packed.docx' || result.sizeBytes <= 0 || result.warnings.length) throw new Error('Invalid packaged CLI result');
   const { default: JSZip } = await import('jszip');
