@@ -64,6 +64,7 @@ test('CLI file mode, default output, strict and invalid requests', async () => {
     assert.equal(JSON.parse(file.stdout).path, path.join(await realpath(h.root), 'output', 'input.docx'));
     const strict = await run(h.root, ['-', '--strict'], '![missing](missing.png)');
     assert.equal(JSON.parse(strict.stderr).error.code, 'CONTENT_INCOMPLETE');
+    assert.deepEqual(JSON.parse(strict.stderr).error.diagnostics.map(d => [d.code, d.line]), [['IMAGE_UNAVAILABLE', 1]]);
     assert.deepEqual(await readdir(path.join(h.root, 'output')), ['input.docx']);
     for (const request of ['{}', '{"protocol":1,"config":{},"input":{}}', 'invalid json']) {
       const invalid = await run(h.root, ['--request'], request);

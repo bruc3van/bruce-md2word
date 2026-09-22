@@ -52,6 +52,9 @@ test('missing images and unsupported Mermaid are visible degradations; strict sa
     assert.equal(strict.isError, true);
     assert.equal(code(strict), 'CONTENT_INCOMPLETE', JSON.stringify(strict));
     assert.equal(saved, false);
+    assert.match(JSON.stringify(strict.content), /IMAGE_UNAVAILABLE/);
+    assert.match(JSON.stringify(strict.content), /MERMAID_NOT_RENDERED/);
+    assert.match(JSON.stringify(strict.content), /line 3/);
   } finally { await h.close(); }
 });
 test('schema rejects mutually incompatible sources and errors retain codes', async () => {

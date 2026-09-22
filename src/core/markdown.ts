@@ -16,6 +16,22 @@ export function parseMarkdown(markdown: string, limits: Limits): ParsedMarkdown 
   const safeLink = parser.validateLink.bind(parser);
   parser.validateLink = value => /^(?:data:image\/|file:)/i.test(value) || safeLink(value);
   const diagnostics = new Diagnostics(limits.maxDiagnostics);
+  // Footnote definitions otherwise become reference links and disappear from
+  // visible text. Keep unsupported definitions literal, including their bodies.
+  const referenceRule = parser.block.ruler.getRules('').find(rule => rule.name === 'reference');
+  if (!referenceRule) throw new Error('Missing Markdown reference rule');
+  const footnoteLines = new Set<number>();
+  parser.block.ruler.at('reference', (state, start, end, silent) => {
+    const line = state.src.slice(state.bMarks[start] + state.tShift[start], state.eMarks[start]);
+    if (/^\[\^[^\]\n]+\]:/.test(line)) {
+      if (!silent && !footnoteLines.has(start)) {
+        footnoteLines.add(start);
+        diagnostics.add('FOOTNOTE_NOT_CONVERTED', 'Footnotes are not converted to native Word footnotes; definition and reference text retained.', 'degradation', start + 1);
+      }
+      return false;
+    }
+    return referenceRule(state, start, end, silent);
+  });
   const images: ImageReference[] = [];
   const diagrams: DiagramReference[] = [];
   const formulas: FormulaReference[] = [];

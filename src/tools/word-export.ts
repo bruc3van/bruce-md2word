@@ -7,7 +7,7 @@ import { readInput } from '../runtime/paths.js';
 import { acquireImages } from '../runtime/assets.js';
 import { runWorker } from '../runtime/worker-client.js';
 import { TaskQueue } from '../runtime/queue.js';
-import { ExportError } from '../runtime/errors.js';
+import { ExportError, ContentIncompleteError } from '../runtime/errors.js';
 import { runCli } from '../runtime/cli-client.js';
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 export function createWordExport(ctx: Context, config: ResolvedConfig, queue: TaskQueue) {
@@ -44,7 +44,7 @@ export function createWordExport(ctx: Context, config: ResolvedConfig, queue: Ta
         if (!attachments) throw new ExportError('Attachment delivery requires the DSH attachment service.', 'CONFIGURATION_ERROR');
         const result = await runWorker(input.markdown, config, signal, (refs, ioSignal) => acquireImages(ctx.fs, refs, input, config, ioSignal));
         signal.throwIfAborted();
-        if (args.strict && result.warnings.some(w => w.severity === 'degradation')) throw new ExportError('Strict export rejected incomplete content. Resolve missing/unsupported images, Mermaid or formulas before retrying.', 'CONTENT_INCOMPLETE');
+        if (args.strict && result.warnings.some(w => w.severity === 'degradation')) throw new ContentIncompleteError(result.warnings);
         const attachment = await attachments.saveFile({ data: result.data, name: input.fileName });
         // Storage owns any committed object if cancellation races with saveFile.
         signal.throwIfAborted();

@@ -29,12 +29,13 @@ export function createStyles(): IStylesOptions {
             line: 360  // 1.5倍行距
           },
           indent: {
-            firstLine: charsToTwips(2)  // 首行缩进2字符
+            firstLine: 0  // 首行缩进仅由正文样式应用，避免污染列表和图片
           }
         }
       }
     },
     paragraphStyles: [
+      { id: "BodyText", name: "Body Text", basedOn: "Normal", next: "BodyText", paragraph: { indent: { firstLine: charsToTwips(2) } } },
       {
         id: "Heading1",
         name: "Heading 1",

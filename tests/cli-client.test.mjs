@@ -50,3 +50,17 @@ test('CLI errors survive Node warning lines and require a versioned envelope', a
     await assert.rejects(runCli(ctx, args, {}, config, new AbortController().signal), { code: 'CONVERSION_FAILED', message: 'CLI exited without a valid error response (exit code: 1).' });
   }
 });
+
+test('strict error diagnostics survive CLI transport and malformed diagnostic payloads are rejected', async () => {
+  const diagnostics = [{ code: 'IMAGE_UNAVAILABLE', severity: 'degradation', message: 'Missing image.', line: 2 }];
+  const ctxFor = details => ({ get: name => name === 'shell' ? { resolve: x => x, run: async () => ({ ...runResult(success), exitCode: 1, stderr: { text: JSON.stringify({ protocol: 1, error: { code: 'CONTENT_INCOMPLETE', message: 'Incomplete', diagnostics: details } }), truncated: false } }) } : undefined });
+  await assert.rejects(runCli(ctxFor(diagnostics), args, {}, config, new AbortController().signal), error => {
+    assert.equal(error.code, 'CONTENT_INCOMPLETE');
+    assert.deepEqual(error.diagnostics, diagnostics);
+    assert.match(error.message, /IMAGE_UNAVAILABLE \(line 2\)/);
+    return true;
+  });
+  for (const malformed of [[{ ...diagnostics[0], line: -1 }], [{ ...diagnostics[0], message: 'x'.repeat(301) }], Array(101).fill(diagnostics[0]), 'invalid']) {
+    await assert.rejects(runCli(ctxFor(malformed), args, {}, config, new AbortController().signal), { code: 'CONVERSION_FAILED' });
+  }
+});

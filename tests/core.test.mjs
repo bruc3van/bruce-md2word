@@ -131,3 +131,78 @@ test('DOCX integrity validator rejects missing media and corrupt XML', async () 
   valid.zip.file('word/document.xml', '<broken>');
   await assert.rejects(validateArtifact(await valid.zip.generateAsync({ type: 'uint8array' }), defaults.maxOutputBytes), { code: 'CONVERSION_FAILED' });
 });
+
+test('table alignment and meaningful Unicode spaces survive conversion', async () => {
+  const result = await document('| Left | Center | Right |\n| :--- | :---: | ---: |\n| a | b | c |\n\n甲\u00a0乙\u3000丙');
+  const dom = new JSDOM(result.xml, { contentType: 'text/xml' });
+  try {
+    const aligns = [...dom.window.document.getElementsByTagName('w:jc')].map(n => n.getAttribute('w:val'));
+    assert.deepEqual(aligns, ['left', 'center', 'right', 'left', 'center', 'right']);
+    assert.ok(result.xml.includes('甲\u00a0乙\u3000丙'));
+  } finally { dom.window.close(); }
+});
+
+test('standalone images use natural size, no first-line indent, and list images fit their container', async () => {
+  const small = await sharp({ create: { width: 32, height: 16, channels: 3, background: '#fff' } }).png().toBuffer();
+  const large = await sharp({ create: { width: 1200, height: 400, channels: 3, background: '#fff' } }).png().toBuffer();
+  const result = await document('![small](s.png)\n\n- outer\n  - nested ![large](l.png)', [{ id: 'image-0', data: small }, { id: 'image-1', data: large }]);
+  const dom = new JSDOM(result.xml, { contentType: 'text/xml' });
+  try {
+    const d = dom.window.document;
+    const extents = [...d.getElementsByTagName('wp:extent')];
+    assert.equal(Number(extents[0].getAttribute('cx')) / 9525, 32);
+    assert.equal(Number(extents[0].getAttribute('cy')) / 9525, 16);
+    assert.ok(Number(extents[1].getAttribute('cx')) / 9525 <= (9072 - 1440) / 15);
+    const p = d.getElementsByTagName('w:p')[0];
+    assert.equal(p.getElementsByTagName('w:ind')[0].getAttribute('w:firstLine'), '0');
+    assert.equal(p.getElementsByTagName('w:jc')[0].getAttribute('w:val'), 'center');
+  } finally { dom.window.close(); }
+});
+
+test('internal links target unique heading bookmarks, including Chinese and duplicate slugs', async () => {
+  const result = await document('[first](#intro) [second](#intro-1) [中文](#%E4%B8%AD%E6%96%87)\n\n# Intro\n\n# Intro\n\n# 中文');
+  const dom = new JSDOM(result.xml, { contentType: 'text/xml' });
+  try {
+    const d = dom.window.document;
+    const names = [...d.getElementsByTagName('w:bookmarkStart')].map(n => n.getAttribute('w:name'));
+    assert.equal(new Set(names).size, 3);
+    assert.deepEqual([...d.getElementsByTagName('w:hyperlink')].map(n => n.getAttribute('w:anchor')), names);
+    assert.deepEqual(result.warnings, []);
+    assert.doesNotMatch(await result.zip.file('word/_rels/document.xml.rels').async('string'), /Target="#/);
+  } finally { dom.window.close(); }
+  const missing = await document('[missing](#absent)');
+  assert.match(missing.xml, /missing/);
+  assert.equal(missing.warnings[0].code, 'LINK_UNAVAILABLE');
+});
+
+test('unsupported footnotes retain definition text, warn with source line, and leave code and normal references alone', async () => {
+  const result = await document('说明[^1]\n\n[^1]: 脚注内容\n    第二行\n\n[normal][ref]\n\n[ref]: https://example.com\n\n```txt\n[^2]: code\n```');
+  for (const text of ['说明[^1]', '[^1]: 脚注内容', '第二行', '[^2]: code']) assert.ok(result.xml.includes(text), text);
+  assert.deepEqual(result.warnings.map(w => [w.code, w.line]), [['FOOTNOTE_NOT_CONVERTED', 3]]);
+  assert.match(await result.zip.file('word/_rels/document.xml.rels').async('string'), /https:\/\/example.com/);
+});
+
+test('list text, continuation paragraphs and nested blocks share a container without changing restart semantics', async () => {
+  const result = await document('3. outer\n\n   continued\n\n   5. nested\n\n      ```txt\n      code\n      ```\n\n      | A | B |\n      | - | - |\n      | a | b |\n\n4. back\n\n# Chapter\n\n1. restart\n\n# Explicit\n\n7. seven\n\n> - quoted');
+  const dom = new JSDOM(result.xml, { contentType: 'text/xml' });
+  try {
+    const d = dom.window.document;
+    const ps = [...d.getElementsByTagName('w:p')];
+    const p = text => ps.find(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('') === text);
+    const ind = text => p(text).getElementsByTagName('w:ind')[0];
+    assert.equal(ind('outer').getAttribute('w:left'), '720');
+    assert.equal(ind('outer').getAttribute('w:hanging'), '480');
+    assert.equal(ind('outer').hasAttribute('w:firstLine'), false);
+    assert.equal(ind('continued').getAttribute('w:left'), '720');
+    assert.equal(p('continued').getElementsByTagName('w:numPr').length, 0);
+    assert.equal(ind('nested').getAttribute('w:left'), '1440');
+    assert.equal(ind('code').getAttribute('w:left'), '1680');
+    assert.equal(d.getElementsByTagName('w:tblW')[0].getAttribute('w:w'), String(9072 - 1440));
+    assert.equal(ind('quoted').getAttribute('w:left'), '1200');
+    const id = text => p(text).getElementsByTagName('w:numId')[0].getAttribute('w:val');
+    assert.equal(id('outer'), id('back'));
+    assert.notEqual(id('outer'), id('restart'));
+    assert.notEqual(id('restart'), id('seven'));
+    assert.match(result.numbering, /w:start w:val="7"/);
+  } finally { dom.window.close(); }
+});

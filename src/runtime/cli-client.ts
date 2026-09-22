@@ -7,7 +7,7 @@ import type { ResolvedConfig } from '../config.js';
 import { defaults } from '../config.js';
 import type { WordExportInput } from './paths.js';
 import type { Diagnostic } from '../core/diagnostics.js';
-import { ExportError } from './errors.js';
+import { ExportError, ContentIncompleteError } from './errors.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -16,6 +16,14 @@ function bundledCommand(): string {
   const quote = (value: string) => "'" + value.replaceAll("'", windows ? "''" : "'\\''") + "'";
   const entry = fileURLToPath(new URL('../cli.js', import.meta.url));
   return `${windows ? '& ' : ''}${quote(process.execPath)} ${quote(entry)}`;
+}
+
+function validDiagnostics(value: unknown, limit: number): value is Diagnostic[] {
+  return Array.isArray(value) && value.length <= limit && value.every(w => w
+    && typeof w.code === 'string' && /^[A-Z_]{1,64}$/.test(w.code)
+    && typeof w.message === 'string' && w.message.length <= 300
+    && ['info', 'degradation'].includes(w.severity)
+    && (w.line === undefined || Number.isSafeInteger(w.line) && w.line > 0));
 }
 
 export interface CliResult { path: string; fileName: string; mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; sizeBytes: number; warnings: Diagnostic[] }
@@ -49,6 +57,10 @@ export async function runCli(ctx: Context, args: WordExportInput, exec: ToolExec
       try { envelope = JSON.parse(line); } catch { continue; }
       const reported = envelope?.error;
       if (envelope?.protocol === 1 && typeof reported?.code === 'string' && /^[A-Z_]{1,64}$/.test(reported.code) && typeof reported.message === 'string') {
+        if (reported.code === 'CONTENT_INCOMPLETE' && reported.diagnostics !== undefined) {
+          if (!validDiagnostics(reported.diagnostics, config.maxDiagnostics)) throw new ExportError('CLI returned invalid error diagnostics.', 'CONVERSION_FAILED');
+          throw new ContentIncompleteError(reported.diagnostics);
+        }
         throw new HarnessError(reported.message.slice(0, 500), reported.code);
       }
     }

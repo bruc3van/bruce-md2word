@@ -9,7 +9,7 @@ import { readInput, outputName, type WordExportInput } from './runtime/paths.js'
 import { acquireImages } from './runtime/assets.js';
 import { runWorker } from './runtime/worker-client.js';
 import { saveFile } from './runtime/save-file.js';
-import { ExportError } from './runtime/errors.js';
+import { ExportError, ContentIncompleteError } from './runtime/errors.js';
 
 const help = `Usage: bruce-md2word <input.md | -> [-o output.docx] [--strict] [--asset-base-dir directory]
 
@@ -96,7 +96,7 @@ async function main(): Promise<void> {
     const source = await readInput(ctx.fs, input, {} as never, limits, signal);
     const result = await runWorker(source.markdown, limits, signal, (refs, ioSignal) => acquireImages(ctx.fs, refs, source, limits, ioSignal));
     signal.throwIfAborted();
-    if (input.strict && result.warnings.some(w => w.severity === 'degradation')) throw new ExportError('Strict export rejected incomplete content.', 'CONTENT_INCOMPLETE');
+    if (input.strict && result.warnings.some(w => w.severity === 'degradation')) throw new ContentIncompleteError(result.warnings);
     const requestedDir = values.output ? path.dirname(path.resolve(values.output)) : path.resolve('output');
     // Refuse a redirected final directory; canonical parent aliases (e.g. /tmp)
     // are fine. Publication checks repeat immediately before the syscall.
@@ -113,7 +113,7 @@ async function main(): Promise<void> {
 try { await main(); }
 catch (cause) {
   const error = (controller.signal.aborted ? controller.signal.reason : cause) as { code?: string; message?: string };
-  process.stderr.write(JSON.stringify({ protocol: 1, error: { code: error?.code ?? 'CONVERSION_FAILED', message: (error?.message ?? 'Conversion failed.').slice(0, 500) } }) + '\n');
+  process.stderr.write(JSON.stringify({ protocol: 1, error: { code: error?.code ?? 'CONVERSION_FAILED', message: (error?.message ?? 'Conversion failed.').slice(0, 500), ...(error instanceof ContentIncompleteError ? { diagnostics: error.diagnostics } : {}) } }) + '\n');
   process.exitCode = controller.signal.aborted ? 130 : 1;
 } finally {
   clearTimeout(timer);
