@@ -4,7 +4,7 @@
 
 让 Agent 写好的报告、方案和技术说明直接成为可交付的 `.docx`：中文内容自动应用预设排版，Mermaid 图表在本机渲染为图片并嵌入，LaTeX 数学公式转换为可继续编辑的 Word 原生公式，减少复制内容后重新排版、截图和录入公式的工作。
 
-提供 **中文 Skill + 独立 CLI**，供具备命令执行能力的 Agent 和自动化脚本调用；同时提供 **DSH 插件**，通过原生 `word_export` 工具导出。npm 包、CLI 和 Skill 均名为 `bruce-md2word`。
+提供 **Skill + 独立 CLI**，供具备命令执行能力的 Agent 和自动化脚本调用；同时提供 **DSH 插件**，通过原生 `word_export` 工具导出。npm 包、CLI 和 Skill 均名为 `bruce-md2word`。
 
 ## 三个特色功能
 
@@ -33,19 +33,19 @@ Agent 可以导出已有 Markdown 文件，也可以直接传入生成的正文�
 
 ## 选择安装方式
 
-通用 Agent 选择中文 Skill + CLI；DSH 用户选择插件。两种方式复用同一转换引擎，无需同时安装。
+通用 Agent 选择Skill + CLI；DSH 用户选择插件。两种方式复用同一转换引擎，无需同时安装。
 
-### 方式一：中文 Skill + CLI
+### 方式一：Skill + CLI
 
-#### 安装中文 Skill
+#### 安装Skill
 
 Skill 名称为 `bruce-md2word`，支持按名称调用的 Agent 可使用该名称选择技能；npm 包名和 CLI 命令也统一为 `bruce-md2word`。
 
-仓库提供独立的 [中文 Skill](skills/bruce-md2word/SKILL.md)，指导具备命令执行能力的 Agent 调用 CLI、处理诊断并交付真实文件路径。它不依赖 DSH 服务，与插件内部调用 `word_export` 的引导说明分别使用。
+仓库提供独立的 [Skill](skills/bruce-md2word/SKILL.md)，指导具备命令执行能力的 Agent 调用 CLI、处理诊断并交付真实文件路径。它不依赖 DSH 服务，与插件内部调用 `word_export` 的引导说明分别使用。
 
 将源码中的整个 `skills/bruce-md2word/` 目录复制到目标 Agent 配置的技能目录，保留 `SKILL.md` 和 `references/`。按该 Agent 的方式重新加载技能。可直接给 Agent 以下指令：
 
-> 请从 https://github.com/bruc3van/bruce-md2word 获取 skills/bruce-md2word 中文技能目录，安装到当前 Agent 的技能目录，保留 references 子目录。检查 Node.js 24 并安装独立 CLI，然后使用该技能将 docs/报告.md 严格导出为 Word，返回真实路径和警告。
+> 请从 https://github.com/bruc3van/bruce-md2word 获取 skills/bruce-md2word 技能目录，安装到当前 Agent 的技能目录，保留 references 子目录。检查 Node.js 24 并安装独立 CLI，然后使用该技能将 docs/报告.md 严格导出为 Word，返回真实路径和警告。
 
 Skill 随 `bruce-md2word` npm 包分发，可从安装包根目录下的 `skills/bruce-md2word/` 复制，也可从源码获取。不同 Agent 的技能目录和发现机制以其配置为准；这里提供通用文件格式和 CLI 工作流，不表示已逐一验证所有 Agent。不支持自动发现 Skill 的 Agent，可将其作为项目指令读取。
 
