@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 import sharp from 'sharp';
 import bmp from 'bmp-js';
+import { JSDOM } from 'jsdom';
+import { Diagnostics } from '../lib/core/diagnostics.js';
 import { defaults } from '../lib/config.js';
 import { parseMarkdown } from '../lib/core/markdown.js';
 import { convert } from '../lib/core/convert.js';
@@ -32,6 +34,59 @@ test('independent lists restart, explicit starts and nested/loose lists retain c
   const ids = [...result.xml.matchAll(/<w:numId w:val="(\d+)"/g)].map(m => m[1]);
   assert.equal(ids[0], ids[1]); assert.notEqual(ids[0], ids[3]);
   assert.match(result.xml, /w:bottom/);
+});
+
+test('soft breaks separate formatted words in paragraphs, links and tight lists', async () => {
+  const result = await document('**hello**\n**world**\n\n[linked](https://example.com)\n*word*\n\n- **list**\n  **item**\n- next\n\n**hard**  \n**break**');
+  const dom = new JSDOM(result.xml, { contentType: 'text/xml' });
+  try {
+    const paragraphs = [...dom.window.document.getElementsByTagName('w:p')];
+    assert.deepEqual(paragraphs.map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')), ['hello world', 'linked word', 'list item', 'next', 'hardbreak']);
+    assert.equal(paragraphs[4].getElementsByTagName('w:br').length, 1);
+    assert.deepEqual(result.warnings, []);
+  } finally { dom.window.close(); }
+});
+
+test('zero-based lists retain zero in abstract and concrete numbering', async () => {
+  const result = await document('0. zero\n1. one\n\n# Restart\n\n0. again');
+  const dom = new JSDOM(result.numbering, { contentType: 'text/xml' });
+  try {
+    const nums = [...dom.window.document.getElementsByTagName('w:num')];
+    const usedIds = [...result.xml.matchAll(/<w:numId w:val="(\d+)"/g)].map(m => m[1]);
+    assert.equal(usedIds[0], usedIds[1]);
+    assert.notEqual(usedIds[0], usedIds[2]);
+    for (const id of new Set(usedIds)) {
+      const num = nums.find(n => n.getAttribute('w:numId') === id);
+      assert.equal(num.getElementsByTagName('w:startOverride')[0].getAttribute('w:val'), '0');
+      const abstractId = num.getElementsByTagName('w:abstractNumId')[0].getAttribute('w:val');
+      const abstract = [...dom.window.document.getElementsByTagName('w:abstractNum')].find(n => n.getAttribute('w:abstractNumId') === abstractId);
+      assert.equal(abstract.getElementsByTagName('w:start')[0].getAttribute('w:val'), '0');
+    }
+  } finally { dom.window.close(); }
+});
+
+test('portrait images fit the page and preserve aspect ratio in paragraphs, lists and cells', async () => {
+  const data = await sharp({ create: { width: 400, height: 1600, channels: 3, background: '#fff' } }).png().toBuffer();
+  const result = await document('![portrait](x.png)\n\n- ![list](x.png)\n\n| image |\n| --- |\n| ![cell](x.png) |', Array.from({ length: 3 }, (_, i) => ({ id: `image-${i}`, data })));
+  const extents = [...result.xml.matchAll(/<wp:extent cx="(\d+)" cy="(\d+)"/g)];
+  assert.equal(extents.length, 3);
+  for (const [, cx, cy] of extents) {
+    const width = Number(cx) / 9525, height = Number(cy) / 9525;
+    assert.ok(height <= 740 && width > 0);
+    assert.ok(Math.abs(height / width - 4) < 0.01);
+  }
+  assert.deepEqual(result.warnings, []);
+});
+
+test('diagnostic truncation preserves info and never hides an omitted degradation', () => {
+  for (const severities of [['info', 'info', 'info'], ['degradation', 'info', 'info'], ['info', 'degradation', 'info'], ['info', 'info', 'degradation']]) {
+    const diagnostics = new Diagnostics(1);
+    for (const severity of severities) diagnostics.add('TEST', 'message', severity);
+    assert.equal(diagnostics.items.length, 1);
+    assert.equal(diagnostics.items[0].code, 'DIAGNOSTICS_TRUNCATED');
+    assert.equal(diagnostics.items[0].severity, severities.includes('degradation') ? 'degradation' : 'info');
+    assert.match(diagnostics.items[0].message, /\(3\)/);
+  }
 });
 test('tables retain escaped pipes and explicit cell widths', async () => {
   const result = await document('| 左 | 右 |\n| :--- | ---: |\n| a\\|b | **c** |');

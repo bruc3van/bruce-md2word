@@ -145,3 +145,42 @@ test('small-text warnings identify the fence and do not block strict delivery', 
     assert.match(r.value.warnings[0].message, /pt/);
   } finally { await h.close(); }
 });
+
+test('unconsumed state statements retain source and strict mode rejects the export', async () => {
+  const h = await harness();
+  try {
+    for (const statement of ['note right of Active : 必须保留的说明', 'note left of Active\n多行说明\nend note', 'unsupported_statement']) {
+      const text = fence('stateDiagram-v2\n[*] --> Active\n' + statement);
+      const normal = await h.call(source(text));
+      assert.equal(normal.isError, false, JSON.stringify(normal));
+      assert.equal(normal.value.warnings[0].code, 'MERMAID_NOT_RENDERED');
+      const zip = await JSZip.loadAsync(await h.bytes(normal.value.attachment));
+      const xml = await zip.file('word/document.xml').async('string');
+      assert.ok(xml.includes(statement.split('\n')[0]));
+      assert.doesNotMatch(xml, /<w:drawing>/);
+      const strict = await h.call({ ...source(text), strict: true });
+      assert.equal(strict.isError, true);
+      assert.equal(code(strict), 'CONTENT_INCOMPLETE');
+    }
+    // Notes are supported by the sequence parser and must keep rendering.
+    const sequence = await h.call({ ...source(fence('sequenceDiagram\nA->>B: Request\nNote right of B: 保留说明')), strict: true });
+    assert.equal(sequence.isError, false, JSON.stringify(sequence));
+    assert.deepEqual(sequence.value.warnings, []);
+  } finally { await h.close(); }
+});
+
+test('truncated readability hints do not reject strict export but omitted degradation does', async () => {
+  const h = await harness({ maxDiagnostics: 1 });
+  const graph = 'graph LR\n' + Array.from({ length: 10 }, (_, i) => `N${i}[处理步骤${i}]`).join('-->');
+  const text = fence(graph) + '\n\n' + fence(graph);
+  try {
+    const result = await h.call({ ...source(text), strict: true });
+    assert.equal(result.isError, false, JSON.stringify(result));
+    assert.equal(result.value.warnings.length, 1);
+    assert.equal(result.value.warnings[0].code, 'DIAGNOSTICS_TRUNCATED');
+    assert.equal(result.value.warnings[0].severity, 'info');
+    const incomplete = await h.call({ ...source(text + '\n\n' + fence('pie\n"A": 1')), strict: true });
+    assert.equal(incomplete.isError, true);
+    assert.equal(code(incomplete), 'CONTENT_INCOMPLETE');
+  } finally { await h.close(); }
+});

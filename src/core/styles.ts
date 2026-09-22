@@ -5,6 +5,8 @@ export const PAGE_WIDTH = 11906;
 export const PAGE_HEIGHT = 16838;
 export const MARGIN = 1417;
 export const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+// Pixels at 96 DPI; leave room for paragraph spacing and table cell padding.
+export const MAX_IMAGE_HEIGHT = 740;
 export function charsToTwips(chars: number, fontSize = 12) {
   // 1 字符 ≈ 1 个字号大小
   // 1 pt = 20 twips

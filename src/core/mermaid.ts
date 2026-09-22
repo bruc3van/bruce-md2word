@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import type { Limits } from '../config.js';
 import type { EmbeddedImage } from './html-to-docx.js';
 import { ExportError } from '../runtime/errors.js';
+import { MAX_IMAGE_HEIGHT } from './styles.js';
 
 // All fonts are resolved locally. No web fonts or browser runtime are used.
 export const DIAGRAM_FONT = 'PingFang SC, Microsoft YaHei, Noto Sans CJK SC, WenQuanYi Micro Hei, sans-serif';
@@ -77,7 +78,7 @@ export async function renderDiagram(source: string, limits: Limits): Promise<Ren
   if (!(width > 0 && height > 0) || width > limits.maxImageDimension || height > limits.maxImageDimension || width * height > limits.maxImagePixels) throw new ExportError('Mermaid dimensions exceed the configured limit.', 'LIMIT_EXCEEDED');
   const data = await sharp(input, { density: 144, limitInputPixels: limits.maxImagePixels }).flatten({ background: '#ffffff' }).png().toBuffer();
   if (data.byteLength > limits.maxImageBytes) throw new ExportError('Mermaid PNG exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
-  const displayWidth = Math.min(width / 2, 560, 740 * width / height);
+  const displayWidth = Math.min(width / 2, 560, MAX_IMAGE_HEIGHT * width / height);
   const dom = new JSDOM(svg, { contentType: 'image/svg+xml' });
   let minFontSize: number;
   try {

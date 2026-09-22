@@ -2,7 +2,7 @@
 import { JSDOM } from 'jsdom';
 import { Paragraph, TextRun, ImageRun, ExternalHyperlink, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, HeadingLevel, VerticalAlign } from 'docx';
 import type { ParagraphChild, IRunOptions, INumberingOptions } from 'docx';
-import { CONTENT_WIDTH, numberingLevels } from './styles.js';
+import { CONTENT_WIDTH, MAX_IMAGE_HEIGHT, numberingLevels } from './styles.js';
 import type { Diagnostics } from './diagnostics.js';
 export interface EmbeddedImage { data: Uint8Array; type: 'png' | 'jpg' | 'gif' | 'bmp'; width: number; height: number; displayWidth?: number }
 type Block = Paragraph | Table;
@@ -18,9 +18,12 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     const runs: ParagraphChild[] = [];
     for (const node of nodes) {
       if (node.nodeType === 3) {
-        const raw = node.textContent ?? '';
+        // markdown-it adds a formatting newline after <br>; the run already
+        // contains the hard break, so do not turn that newline into a space.
+        const raw = node.previousSibling?.nodeName === 'BR'
+          ? (node.textContent ?? '').replace(/^\r?\n/, '') : node.textContent ?? '';
         const collapsed = raw.replace(/\s+/g, ' ');
-        const text = collapsed.trim() ? collapsed : /[ \t]/.test(raw) ? ' ' : '';
+        const text = collapsed;
         if (text) runs.push(...textRuns(text, style));
         continue;
       }
@@ -30,7 +33,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       if (tag === 'IMG') {
         const image = images.get(el.getAttribute('src') ?? '');
         if (image) {
-          const width = Math.min(image.displayWidth ?? 560, maxWidth);
+          const width = Math.min(image.displayWidth ?? 560, maxWidth, MAX_IMAGE_HEIGHT * image.width / image.height);
           runs.push(new ImageRun({ type: image.type, data: image.data, transformation: { width, height: Math.round(width * image.height / image.width) }, altText: { title: el.getAttribute('alt') ?? '', description: el.getAttribute('alt') ?? '', name: 'Image' } }));
         } else runs.push(new TextRun({ ...style, text: `[图片: ${el.getAttribute('alt') || '图片'}]`, italics: true, color: '6B7280' }));
       } else if (tag === 'BR') runs.push(new TextRun({ text: '', break: 1 }));
@@ -50,7 +53,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     const ordered = el.tagName === 'OL';
     const reference = `list-${nextList++}`;
     const start = Number(el.getAttribute('start') ?? 1);
-    numbering.push({ reference, levels: numberingLevels(ordered, Number.isSafeInteger(start) && start > 0 ? start : 1) });
+    numbering.push({ reference, levels: numberingLevels(ordered, Number.isSafeInteger(start) && start >= 0 ? start : 1) });
     const result: Block[] = [];
     for (const li of Array.from(el.children).filter(child => child.tagName === 'LI')) {
       let numbered = false;
@@ -62,7 +65,9 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
         pending = [];
       };
       for (const child of li.childNodes) {
-        if (child.nodeType === 3 && !(child.textContent ?? '').trim()) continue;
+        // Keep soft breaks between inline siblings, but discard list HTML layout whitespace.
+        if (child.nodeType === 3 && !(child.textContent ?? '').trim()
+          && (!pending.length || !child.nextSibling || /^(UL|OL|P|PRE|TABLE|BLOCKQUOTE|HR|H[1-6])$/.test(child.nextSibling.nodeName))) continue;
         const tag = child.nodeName;
         if (tag === 'UL' || tag === 'OL') { flush(!numbered); result.push(...list(child as Element, level + 1)); }
         else if (tag === 'P') { flush(); pending.push(...child.childNodes); flush(!numbered); }

@@ -14,7 +14,8 @@ export class Diagnostics {
     if (this.items.length < this.limit) this.items.push(item);
     else {
       this.omitted++;
-      this.items[this.limit - 1] = { code: 'DIAGNOSTICS_TRUNCATED', message: `Additional diagnostics omitted (${this.omitted + 1}).`, severity: 'degradation' };
+      const previous = this.items[this.limit - 1];
+      this.items[this.limit - 1] = { code: 'DIAGNOSTICS_TRUNCATED', message: `Additional diagnostics omitted (${this.omitted + 1}).`, severity: previous.severity === 'degradation' || severity === 'degradation' ? 'degradation' : 'info' };
     }
   }
 }

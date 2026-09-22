@@ -12,6 +12,16 @@ const adaptRenderer = {
   name: 'mermaid-layout-adaptations',
   setup(plugin) {
     plugin.onResolve({ filter: /^beautiful-mermaid$/ }, () => ({ path: path.join(rendererRoot, 'src/index.ts') }));
+    plugin.onLoad({ filter: /beautiful-mermaid[/\\]src[/\\]parser\.ts$/ }, ({ path: file }) => {
+      let contents = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+      // The pinned state parser silently drops unmatched lines (including notes).
+      // Reject at its actual fallthrough so unsupported content reaches our
+      // source-preserving degradation path instead of producing a partial image.
+      const before = "registerStateNode(graph, compositeStack, { id, label, shape: 'rounded' })\n      continue\n    }\n  }\n\n  return graph";
+      if (contents.split(before).length !== 2) throw new Error(`Mermaid state parser patch target changed: ${file}`);
+      contents = contents.replace(before, before.replace('    }\n  }', "    }\n    throw new Error('Unsupported state diagram statement: ' + line)\n  }"));
+      return { contents, loader: 'ts', resolveDir: path.dirname(file) };
+    });
     plugin.onLoad({ filter: /beautiful-mermaid[/\\]src[/\\](?:styles|index)\.ts$/ }, ({ path: file }) => {
       let contents = readFileSync(file, 'utf8');
       const before = path.basename(file) === 'styles.ts'
