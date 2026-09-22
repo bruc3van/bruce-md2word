@@ -1,5 +1,19 @@
 # 验证记录
 
+## 2026-09-22 Windows 插件规范修复验证
+
+环境：Windows、Node.js 24.19.0、DSH 服务包 0.1.6-alpha.2、Cordis 4.0.2。宿主源码参考 `ddefc45fbc`；本节测试运行实际发布的服务包，不代表完整宿主 UI 验收。后文 macOS 记录保留为历史验证。
+
+- `npm run typecheck` 通过；`npm test` 共 52 项，51 项通过、0 项失败、1 项明确跳过。跳过项为需要 Windows 文件符号链接权限的专项测试，本机创建文件符号链接返回 EPERM；目录 junction 的输入越界、图片越界和输出目录拒绝测试实际执行并通过。CI 对文件符号链接权限错误不跳过。
+- 模式依赖回归验证了 shell 缺失时不注册工具、服务卸载时撤销工具和 Skill、恢复后可再次导出；项目模式无需宿主 fs 服务。附件服务消失会取消活动任务，恢复后新队列可正常保存附件。
+- 补充 shell 提供方卸载场景后，单独执行 `node --test tests/cli.test.mjs`，6 项全部通过；确认用户取消、插件卸载、shell 服务卸载均终止并等待 DSH 管理的活动 CLI 进程。
+- `npm run test:pack` 通过：独立目录安装 tarball 后，附件读回、默认插件调用包内 CLI 保存 DOCX、独立 CLI 中文 Mermaid 导出均成功。
+- 本地 strict 导出 `output/Windows-完整样式.docx`（10,951 字节，无警告）和 `output/Windows-Mermaid中文.docx`（212,515 字节，无降级）。后者在源码第 32、68、85 行分别提示估算最小字号约 7.4、5.0、7.8 pt；属于可读性提示。
+
+仍未完成 Microsoft Word 整页视觉检查、完整 Web/Desktop UI 交互和真实受限沙箱端到端验收。本次没有修改用户 profile、提交或发布版本。
+
+## 历史验证
+
 验证环境：macOS，Node.js **24.21.0**，DSH 服务包 **0.1.6-alpha.2**，Cordis **4.0.2**。
 
 补充兼容验证：使用本机 `npx @deepseek-ai/dsh@latest web` 对应的 **0.1.5-rc.2** 已安装服务依赖，在隔离目录运行全部 48 项测试通过。peer 兼容声明限定为这两个已测版本。经用户授权，tarball 已安装到现有 `web` profile；bundle 注册和配置组合检查通过，实际安装包的 CLI 成功生成样式试用文档。原运行中的 Web 进程仍需重启，尚未据此声明 UI 中已加载新工具。
@@ -46,7 +60,7 @@ node scripts/mermaid-example.mjs # 导出中文 Mermaid Word 并提取图片供�
 
 ## 尚未验收
 
-- Windows 实机验证按用户安排延后；Linux 实机冒烟及各平台文件系统、执行器、沙箱行为仍待验证。三平台 GitHub Actions 的实时结果见仓库 Actions 页面。
+- Windows 本机自动化验证已补充在上文；Linux 实机冒烟和各平台受限沙箱行为仍待验证。三平台 GitHub Actions 的实时结果见仓库 Actions 页面。
 - Microsoft Word 中的中文字体、列表、表格、图片和分页视觉检查。当前机器没有 Microsoft Word/LibreOffice；WPS 界面工具未完成样例打开检查，不把 ZIP/XML 校验视为视觉验收。
 - 完整 DSH Web/Desktop 从用户请求到工具调用的交互验收。实际 profile 启动及工具调用已程序化验证，尚未验证 UI 操作。
 - DSH 文件附件的完整 Web/Desktop 下载体验：参考宿主没有通用下载按钮；默认项目文件交付已绕开此依赖，可选附件模式不承诺浏览器下载能力。

@@ -24,7 +24,7 @@ npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add dsh-md2word@0.1.3
 
 > 请将 dsh-md2word@0.1.3 安装到我的 DSH web profile，使用官方 plugin add 命令；安装后提醒我重启服务。
 
-安装后重启对应 profile。包的 `cordis.patch.yml` 注册 `word_export`；需要 `tools`、`fs` 和项目模式使用的 `shell` 服务。`skills` 可选，存在时自动注册使用说明。插件默认调用包内 CLI，复用 DSH 的 Node 运行时，无需另行全局安装。
+安装后重启对应 profile。包的 `cordis.patch.yml` 加载插件；需要 `tools` 服务，项目模式还需要 `shell`，附件模式需要 `fs` 和 `attachments`。对应服务就绪后才注册 `word_export`；服务卸载会撤销工具、取消任务并等待清理，恢复后重新注册。`skills` 可选，存在时自动注册使用说明。插件默认调用包内 CLI，复用 DSH 的 Node 运行时，无需另行全局安装。
 
 ## 独立 CLI
 
@@ -119,6 +119,8 @@ dsh-md2word --help
 | `concurrency` / `queueSize` | 1 / 8，每个插件实例独立 |
 | `maxDiagnostics` | 100 |
 
+数值配置均为安全整数：`queueSize` 允许 0，其他字段至少为 1；`timeoutMs` 不超过 2147483647。配置 Schema 同时提供范围、步长和字段说明，加载时还会检查绝对路径与 CLI 命令。
+
 项目模式通过 `ctx.shell` 执行 CLI，传入会话工作目录、取消信号和当前沙箱策略；正文、路径及转换参数通过标准输入 JSON 传递，不拼接为 shell 命令。转换在运行 DSH 的本机完成。默认使用包内 CLI 和 DSH 的 Node 运行时，不引入远程转换服务。
 
 CLI 在执行环境中读取文件、运行转换 worker，完成写入后才原子发布 DOCX；不覆盖文件，需要文件系统支持硬链接。拒绝符号链接输出目录。插件不直接使用宿主 Node 文件 API 写入项目。沙箱执行失败不会自动退回无沙箱执行。
@@ -136,7 +138,9 @@ npm run test:pack    # tarball 在独立目录安装并运行 worker
 npm run example      # 生成 output/示例.docx
 ```
 
-测试使用实际发布的 DSH 工具、文件、附件和执行服务；不等同于完整 Web/Desktop 端到端验收。自动化测试覆盖转换、实际 DSH 服务和独立安装包；各平台 CI 状态见 [GitHub Actions](https://github.com/bruc3van/dsh-md2word/actions)。Windows 实机与 Microsoft Word 的分页、视觉效果仍需人工验证。
+测试使用实际发布的 DSH 工具、文件、附件和执行服务；不等同于完整 Web/Desktop 端到端验收。自动化测试覆盖转换、实际 DSH 服务和独立安装包；各平台 CI 状态见 [GitHub Actions](https://github.com/bruc3van/dsh-md2word/actions)。Windows 本机执行记录见 [验证记录](docs/verification.md)，Microsoft Word 的分页、视觉效果仍需人工验证。
+
+Windows 普通权限下使用目录 junction 验证路径越界防护。独立的文件符号链接测试需要开发者模式或创建符号链接权限；本地缺少权限时明确标记跳过，CI 缺少权限则失败，避免把未执行的断言计为通过。
 
 设计与交付调整见[实施方案](docs/implementation-plan.md)。参考实现及版权见 [NOTICE](NOTICE)，许可证为 [MIT](LICENSE)。
 

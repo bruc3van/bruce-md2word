@@ -98,8 +98,8 @@ test('real DSH executor runs the CLI and passes model text through stdin', async
   } finally { await h.close(); }
 });
 
-test('cancel and unload stop and await a live DSH-managed CLI process', async () => {
-  for (const operation of ['cancel', 'unload']) {
+test('cancel, plugin unload and shell loss stop and await a live DSH-managed CLI process', async () => {
+  for (const operation of ['cancel', 'unload', 'shell-unload']) {
     const windows = process.platform === 'win32';
     const quote = value => "'" + value.replaceAll("'", windows ? "''" : "'\\''") + "'";
     const h = await harness({ delivery: 'project', cliCommand: `${windows ? '& ' : ''}${quote(process.execPath)} delayed-cli.mjs` });
@@ -112,7 +112,8 @@ JSON.parse(text); writeFileSync('started', String(process.pid));
 setInterval(() => {}, 1000);
 `);
       await h.ctx.plugin(LocalSubprocess);
-      await h.ctx.plugin(windows ? LocalPwsh : LocalBash, { cwd: h.root, graceMs: 100 });
+      const shellFiber = h.ctx.plugin(windows ? LocalPwsh : LocalBash, { cwd: h.root, graceMs: 100 });
+      await shellFiber;
       const controller = new AbortController();
       const task = h.call({ source: { kind: 'markdown', text: 'x' } }, controller.signal);
       const deadline = Date.now() + 5000;
@@ -122,12 +123,13 @@ setInterval(() => {}, 1000);
       }
       const pid = Number(await readFile(path.join(h.root, 'started'), 'utf8'));
       if (operation === 'cancel') controller.abort();
+      else if (operation === 'shell-unload') await shellFiber.dispose();
       else await h.fiber.dispose();
       const result = await task;
       assert.equal(result.isError, true);
       assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
       await assert.rejects(readdir(path.join(h.root, 'output')), { code: 'ENOENT' });
-      if (operation === 'unload') assert.equal(h.ctx.tools.get('word_export'), undefined);
+      if (operation !== 'cancel') assert.equal(h.ctx.tools.get('word_export'), undefined);
     } finally { await h.close(); }
   }
 });

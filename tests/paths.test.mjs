@@ -31,11 +31,35 @@ test('source symlinks cannot escape roots; an administrator can explicitly allow
   try {
     const file = path.join(outside, 'report.md');
     await writeFile(file, 'outside');
-    await symlink(file, path.join(h.root, 'linked.md'));
+    await symlink(outside, path.join(h.root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
     const signal = new AbortController().signal;
-    await assert.rejects(readInput(h.ctx.fs, { source: { kind: 'file', path: 'linked.md' } }, {}, resolveConfig({ workspaceRoot: h.root }), signal), { code: 'FS_SANDBOX_DENIED' });
+    await assert.rejects(readInput(h.ctx.fs, { source: { kind: 'file', path: 'linked/report.md' } }, {}, resolveConfig({ workspaceRoot: h.root }), signal), { code: 'FS_SANDBOX_DENIED' });
     const result = await readInput(h.ctx.fs, { source: { kind: 'file', path: file } }, {}, resolveConfig({ workspaceRoot: h.root, allowedReadRoots: [outside] }), signal);
     assert.equal(result.markdown, 'outside');
+  } finally { await h.close(); await rm(outside, { recursive: true, force: true }); }
+});
+
+test('file symlinks cannot escape source or image roots', async t => {
+  const h = await harness();
+  const outside = await mkdtemp(path.join(os.tmpdir(), 'md2word-file-link-'));
+  try {
+    await writeFile(path.join(outside, 'report.md'), 'outside');
+    await writeFile(path.join(outside, 'secret.png'), 'not an image');
+    try {
+      await symlink(path.join(outside, 'report.md'), path.join(h.root, 'linked.md'), 'file');
+    } catch (error) {
+      if (process.platform !== 'win32' || error.code !== 'EPERM' || process.env.CI) throw error;
+      t.skip('Windows file symlinks require Developer Mode or symlink privilege; junction checks still run. CI requires this test.');
+      return;
+    }
+    await symlink(path.join(outside, 'secret.png'), path.join(h.root, 'linked.png'), 'file');
+    await assert.rejects(readInput(h.ctx.fs, { source: { kind: 'file', path: 'linked.md' } }, {}, resolveConfig({ workspaceRoot: h.root }), new AbortController().signal), { code: 'FS_SANDBOX_DENIED' });
+    let read = false;
+    h.ctx.fs.readBytes = async () => { read = true; throw new Error('Outside image must not be read'); };
+    const result = await h.call({ source: { kind: 'markdown', text: '![secret](linked.png)', assetBaseDir: '.' } });
+    assert.equal(result.isError, false, JSON.stringify(result));
+    assert.equal(result.value.warnings[0].code, 'IMAGE_UNAVAILABLE');
+    assert.equal(read, false);
   } finally { await h.close(); await rm(outside, { recursive: true, force: true }); }
 });
 

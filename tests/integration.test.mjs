@@ -70,8 +70,8 @@ test('traversal and symlink images never read outside the image base', async () 
   try {
     await mkdir(path.join(h.root, 'docs'));
     await writeFile(path.join(h.root, 'secret.png'), Buffer.from('secret'));
-    await symlink(path.join(h.root, 'secret.png'), path.join(h.root, 'docs', 'link.png'));
-    const result = await h.call({ source: { kind: 'markdown', assetBaseDir: 'docs', text: '![a](../secret.png) ![b](link.png) ![c](https://example.com/a.png) ![d](file:///secret.png)' } });
+    await symlink(h.root, path.join(h.root, 'docs', 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
+    const result = await h.call({ source: { kind: 'markdown', assetBaseDir: 'docs', text: '![a](../secret.png) ![b](linked/secret.png) ![c](https://example.com/a.png) ![d](file:///secret.png)' } });
     assert.equal(result.isError, false, JSON.stringify(result));
     assert.equal(result.value.warnings.length, 4);
     assert.ok(result.value.warnings.every(w => w.code === 'IMAGE_UNAVAILABLE'));

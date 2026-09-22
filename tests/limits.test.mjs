@@ -5,7 +5,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { harness } from './harness.mjs';
 import { outputName } from '../lib/runtime/paths.js';
-import { resolveConfig } from '../lib/config.js';
+import { Config, defaults, resolveConfig } from '../lib/config.js';
 const source = text => ({ source: { kind: 'markdown', text } });
 test('filenames reject paths, device names, controls and ambiguous trailing characters', () => {
   for (const name of ['../x', 'a/b', 'a\\b', 'CON', 'nul.docx', ' a', 'a.', 'a\0']) assert.throws(() => outputName(name), { code: 'INVALID_INPUT' });
@@ -14,6 +14,16 @@ test('filenames reject paths, device names, controls and ambiguous trailing char
 });
 test('invalid configuration fails at load', () => {
   for (const config of [{ concurrency: 0 }, { maxImages: Infinity }, { timeoutMs: 2 ** 32 }, { workspaceRoot: 'relative' }, { allowedReadRoots: ['relative'] }, { queueSize: -1 }]) assert.throws(() => resolveConfig(config));
+});
+
+test('configuration schema rejects fractional, out-of-range and unsafe resource limits', () => {
+  for (const key of Object.keys(defaults)) {
+    for (const value of [1.5, -1, Infinity, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => Config({ [key]: value }), `${key}=${value}`);
+    if (key !== 'queueSize') assert.throws(() => Config({ [key]: 0 }), key);
+  }
+  assert.throws(() => Config({ timeoutMs: 2_147_483_648 }));
+  assert.equal(Config({ queueSize: 0 }).queueSize, 0);
+  assert.equal(Config({}).timeoutMs, defaults.timeoutMs);
 });
 test('markdown byte limits apply to text and to actual provider reads', async () => {
   const h = await harness({ maxMarkdownBytes: 4 });

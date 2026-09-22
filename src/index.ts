@@ -8,12 +8,14 @@ import { createWordExport } from './tools/word-export.js';
 import { registerGuidanceSkill } from './skill.js';
 export { Config } from './config.js';
 export const name = 'dsh-md2word';
-export const inject = ['tools', 'fs'];
+export const inject = ['tools'];
 /** Register one native exporter with per-instance resource ownership. */
 export function apply(ctx: Context, config: PluginConfig = {}): void {
   const resolved = resolveConfig(config);
-  const queue = new TaskQueue(resolved.concurrency, resolved.queueSize, resolved.timeoutMs);
-  ctx.effect(() => () => queue.dispose(), 'dsh-md2word tasks');
-  ctx.tools.register(createWordExport(ctx, resolved, queue));
-  if (resolved.skill) registerGuidanceSkill(ctx);
+  ctx.inject(resolved.delivery === 'project' ? ['shell'] : ['fs', 'attachments'], scoped => {
+    const queue = new TaskQueue(resolved.concurrency, resolved.queueSize, resolved.timeoutMs);
+    scoped.effect(() => () => queue.dispose(), 'dsh-md2word tasks');
+    scoped.tools.register(createWordExport(scoped, resolved, queue));
+    if (resolved.skill) registerGuidanceSkill(scoped);
+  });
 }

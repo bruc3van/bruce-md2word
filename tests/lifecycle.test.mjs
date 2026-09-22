@@ -5,9 +5,58 @@ import { runWorker } from '../lib/runtime/worker-client.js';
 import { defaults } from '../lib/config.js';
 import { harness } from './harness.mjs';
 import { AttachmentError } from '@deepseek-ai/dsh-attachment';
+import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local';
+import LocalSubprocess from '@deepseek-ai/dsh-subprocess-local';
+import LocalPwsh from '@deepseek-ai/dsh-pwsh-local';
+import LocalBash from '@deepseek-ai/dsh-bash-local';
+import path from 'node:path';
 const deferred = () => Promise.withResolvers();
 const signal = () => new AbortController().signal;
 const args = { source: { kind: 'markdown', text: '# Lifecycle' } };
+
+test('project tool waits for shell, unloads with it and exports after service recovery without fs', async () => {
+  const h = await harness({ delivery: 'project' }, undefined, { fs: false, attachments: false });
+  try {
+    assert.equal(h.ctx.tools.get('word_export'), undefined);
+    assert.equal((await h.ctx.skills.list()).some(skill => skill.name === 'dsh-md2word'), false);
+    await h.ctx.plugin(LocalSubprocess);
+    const provider = process.platform === 'win32' ? LocalPwsh : LocalBash;
+    for (let i = 0; i < 2; i++) {
+      const shellFiber = h.ctx.plugin(provider, { cwd: h.root }); await shellFiber;
+      assert.ok(h.ctx.tools.get('word_export'));
+      assert.equal((await h.call(args)).isError, false);
+      await shellFiber.dispose();
+      assert.equal(h.ctx.tools.get('word_export'), undefined);
+      assert.equal((await h.ctx.skills.list()).some(skill => skill.name === 'dsh-md2word'), false);
+    }
+  } finally { await h.close(); }
+});
+
+test('attachment service loss cancels active work and recovery creates a usable queue', async () => {
+  const h = await harness({}, undefined, { attachments: false });
+  try {
+    assert.equal(h.ctx.tools.get('word_export'), undefined);
+    const mount = () => h.ctx.plugin(LocalAttachmentStore, { dshHome: path.join(h.root, 'home') });
+    const provider = mount(); await provider;
+    assert.ok(h.ctx.tools.get('word_export'));
+    const started = deferred();
+    const resolve = h.ctx.fs.resolve.bind(h.ctx.fs);
+    h.ctx.fs.resolve = async (_path, options) => {
+      started.resolve();
+      await new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true }));
+    };
+    const task = h.call(args);
+    await started.promise;
+    await provider.dispose();
+    assert.equal((await task).isError, true);
+    assert.equal(h.ctx.tools.get('word_export'), undefined);
+    h.ctx.fs.resolve = resolve;
+    const replacement = mount(); await replacement;
+    const result = await h.call(args);
+    assert.equal(result.isError, false, JSON.stringify(result));
+    assert.ok((await h.bytes(result.value.attachment)).length > 0);
+  } finally { await h.close(); }
+});
 test('queue admits one task, rejects overflow, and cancellation removes a waiting slot', async () => {
   const queue = new TaskQueue(1, 1, 5000);
   const gate = deferred();
