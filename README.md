@@ -1,12 +1,10 @@
 # bruce-md2word
 
-当前源码的 npm 包、CLI 和 Skill 统一命名为 `bruce-md2word`，不保留旧 CLI 别名。GitHub 仓库地址保持不变。
-
 **面向 AI Agent 的 Markdown 转 Word 工具：开箱即用的中文排版、Mermaid 图表转图片、可编辑数学公式。**
 
 让 Agent 写好的报告、方案和技术说明直接成为可交付的 `.docx`：中文内容自动应用预设排版，Mermaid 图表在本机渲染为图片并嵌入，LaTeX 数学公式转换为可继续编辑的 Word 原生公式，减少复制内容后重新排版、截图和录入公式的工作。
 
-提供 DSH 原生 `word_export` 工具，也提供独立 CLI，供具备命令执行能力的其他 Agent 和自动化脚本调用。
+提供 **中文 Skill + 独立 CLI**，供具备命令执行能力的 Agent 和自动化脚本调用；同时提供 **DSH 插件**，通过原生 `word_export` 工具导出。npm 包、CLI 和 Skill 均名为 `bruce-md2word`。
 
 ## 三个特色功能
 
@@ -33,11 +31,47 @@ Agent 可以导出已有 Markdown 文件，也可以直接传入生成的正文�
 
 安装依赖后，转换在本地完成，无需 Office、Python、浏览器或在线转换服务。默认保存到当前项目的 `output/`，同名文件自动编号。
 
-## 让 Agent 帮你安装
+## 选择安装方式
 
-把下面这句话发给 Agent：
+通用 Agent 选择中文 Skill + CLI；DSH 用户选择插件。两种方式复用同一转换引擎，无需同时安装。
 
-> 请帮我安装这个 DSH 插件，并告诉我如何使用：https://github.com/bruc3van/dsh-md2word
+### 方式一：中文 Skill + CLI
+
+#### 安装中文 Skill
+
+Skill 名称为 `bruce-md2word`，支持按名称调用的 Agent 可使用该名称选择技能；npm 包名和 CLI 命令也统一为 `bruce-md2word`。
+
+仓库提供独立的 [中文 Skill](skills/bruce-md2word/SKILL.md)，指导具备命令执行能力的 Agent 调用 CLI、处理诊断并交付真实文件路径。它不依赖 DSH 服务，与插件内部调用 `word_export` 的引导说明分别使用。
+
+将源码中的整个 `skills/bruce-md2word/` 目录复制到目标 Agent 配置的技能目录，保留 `SKILL.md` 和 `references/`。按该 Agent 的方式重新加载技能。可直接给 Agent 以下指令：
+
+> 请从 https://github.com/bruc3van/bruce-md2word 获取 skills/bruce-md2word 中文技能目录，安装到当前 Agent 的技能目录，保留 references 子目录。检查 Node.js 24 并安装独立 CLI，然后使用该技能将 docs/报告.md 严格导出为 Word，返回真实路径和警告。
+
+Skill 随 `bruce-md2word` npm 包分发，可从安装包根目录下的 `skills/bruce-md2word/` 复制，也可从源码获取。不同 Agent 的技能目录和发现机制以其配置为准；这里提供通用文件格式和 CLI 工作流，不表示已逐一验证所有 Agent。不支持自动发现 Skill 的 Agent，可将其作为项目指令读取。
+
+#### 直接使用 CLI
+
+独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
+
+> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.3.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+
+对应命令：
+
+```sh
+npm install -g bruce-md2word@0.3.0
+bruce-md2word docs/报告.md --strict -o output/项目报告.docx
+bruce-md2word --help
+```
+
+CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正文含相对图片时使用 `--asset-base-dir`。省略 `-o` 时输出到当前目录的 `output/`；显式指定输出目录时，其父目录须已存在。同名文件自动编号，无覆盖选项。
+
+成功时 stdout 输出 JSON；失败时 stderr 输出结构化错误并返回非零退出码，方便 Agent 或脚本判断结果。
+
+### 方式二：DSH 插件
+
+把下面这句话发给 DSH Agent：
+
+> 请帮我安装这个 DSH 插件，并告诉我如何使用：https://github.com/bruc3van/bruce-md2word
 
 安装后重启对应 DSH 服务，即可让 Agent 导出 Word，无需另装 CLI 或 Skill。
 
@@ -62,23 +96,25 @@ npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.3.0
 
 ## 直接描述你要交付的文档
 
+安装后，Agent 可根据当前入口使用 `bruce-md2word` CLI 或 DSH 的 `word_export`。
+
 ### 导出已有 Markdown
 
-> 请将 docs/报告.md 导出为 Word，命名为“项目报告.docx”。使用 word_export，开启 strict；完成后返回实际文件路径，并说明所有警告。
+> 请将 docs/报告.md 导出为 Word，命名为“项目报告.docx”。使用已安装的 bruce-md2word，开启严格模式；完成后返回实际文件路径，并说明所有警告。
 
 ### 从资料生成报告并交付
 
-> 请根据当前项目资料整理一份项目进展报告，包含背景、已完成事项、问题与下一步计划，用表格汇总任务。先保存为 docs/项目进展.md，再使用 word_export 严格导出为“项目进展报告.docx”。检查导出结果，返回实际路径和需要我关注的问题。
+> 请根据当前项目资料整理一份项目进展报告，包含背景、已完成事项、问题与下一步计划，用表格汇总任务。先保存为 docs/项目进展.md，再使用 bruce-md2word 严格导出为“项目进展报告.docx”。检查导出结果，返回实际路径和需要我关注的问题。
 
 ### 在方案中加入图表
 
-> 请编写一份系统接入方案，包含中文 Mermaid 流程图和时序图，保存 Markdown 后使用 word_export 严格导出 Word。如果返回图中文字过小的提示，请根据对应行号简化标签或拆分图表，再重新导出。
+> 请编写一份系统接入方案，包含中文 Mermaid 流程图和时序图，保存 Markdown 后使用 bruce-md2word 严格导出 Word。如果返回图中文字过小的提示，请根据对应行号简化标签或拆分图表，再重新导出。
 
-默认项目模式下，文件位于**运行 DSH 的机器上、当前会话项目的 `output/` 目录**。即使输入位于 `docs/` 子目录，输出也仍在项目 `output/`。已有同名文件时自动追加编号，Agent 应返回工具给出的真实路径。
+文件保存在**运行 CLI 或 DSH 服务的机器上**。CLI 默认输出到命令工作目录的 `output/`，也可用 `-o` 指定路径；DSH 默认项目模式输出到当前会话项目的 `output/`。已有同名文件时自动追加编号，Agent 应返回实际结果中的真实路径。
 
-## 为 Agent 工作流设计
+## DSH 工具接口与结果处理
 
-一次调用接收一个 Markdown 文件或一段正文，返回可由 Agent 继续处理的结构化结果。文件输入示例：
+DSH 的 `word_export` 一次调用接收一个 Markdown 文件或一段正文，返回可由 Agent 继续处理的结构化结果。文件输入示例：
 
 ```json
 {
@@ -108,7 +144,7 @@ npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.3.0
 | Mermaid | 流程图、状态图、时序图、类图、ER 图、XY 图的常用语法 |
 | 数学公式 | LaTeX 行内及块公式转为可编辑 Word 原生公式，覆盖分式、根式、上下标、向量、求和积分、矩阵、分段函数与对齐方程 |
 
-图片相对源 Markdown 所在目录解析；直接传正文时，通过 `assetBaseDir` 指定相对图片目录。网络图片不会自动下载，SVG 输入不受支持。
+图片相对源 Markdown 所在目录解析；直接传正文时，CLI 使用 `--asset-base-dir`，DSH 使用 `assetBaseDir` 指定相对图片目录。网络图片不会自动下载，SVG 输入不受支持。
 
 Mermaid 使用本地轻量渲染器，不覆盖官方全部语法。饼图、甘特图以及部分配置和指令会触发未渲染警告。中文图表需要生成机器安装中文字体；宽图仍可能缩小到不易阅读，建议拆分。具体范围见 [图表参考](docs/agent-reference.md#mermaid-图表)。
 
@@ -131,41 +167,9 @@ Mermaid 使用本地轻量渲染器，不覆盖官方全部语法。饼图、甘
 
 样例与配套图片位于源码仓库，不包含在 npm 安装包中。使用综合样例时，请保留 `fixtures/assets/` 的相对目录结构。
 
-将仓库放入当前 DSH 项目后，可以直接告诉 Agent：
+将仓库放入当前项目后，可以直接告诉 Agent：
 
-> 请使用 word_export 严格导出 fixtures/综合测试.md，返回实际文件路径和所有警告。随后对照源文件中的验收清单，说明哪些检查已经完成，哪些需要在 Word 中人工确认。
-
-## 在其他 Agent 或脚本中使用
-
-### 安装中文 Skill
-
-Skill 名称为 `bruce-md2word`，支持按名称调用的 Agent 可使用该名称选择技能；npm 包名和 CLI 命令也统一为 `bruce-md2word`。
-
-仓库提供独立的 [中文 Skill](skills/bruce-md2word/SKILL.md)，指导具备命令执行能力的 Agent 调用 CLI、处理诊断并交付真实文件路径。它不依赖 DSH 服务，与插件内部调用 `word_export` 的引导说明分别使用。
-
-将源码中的整个 `skills/bruce-md2word/` 目录复制到目标 Agent 配置的技能目录，保留 `SKILL.md` 和 `references/`。按该 Agent 的方式重新加载技能。可直接给 Agent 以下指令：
-
-> 请从 https://github.com/bruc3van/dsh-md2word 获取 skills/bruce-md2word 中文技能目录，安装到当前 Agent 的技能目录，保留 references 子目录。检查 Node.js 24 并安装独立 CLI，然后使用该技能将 docs/报告.md 严格导出为 Word，返回真实路径和警告。
-
-Skill 随 `bruce-md2word` npm 包分发，可从安装包根目录下的 `skills/bruce-md2word/` 复制，也可从源码获取。不同 Agent 的技能目录和发现机制以其配置为准；这里提供通用文件格式和 CLI 工作流，不表示已逐一验证所有 Agent。不支持自动发现 Skill 的 Agent，可将其作为项目指令读取。
-
-### 独立 CLI
-
-独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
-
-> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.3.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
-
-对应命令：
-
-```sh
-npm install -g bruce-md2word@0.3.0
-bruce-md2word docs/报告.md --strict -o output/项目报告.docx
-bruce-md2word --help
-```
-
-CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正文含相对图片时使用 `--asset-base-dir`。省略 `-o` 时输出到当前目录的 `output/`；显式指定输出目录时，其父目录须已存在。同名文件自动编号，无覆盖选项。
-
-成功时 stdout 输出 JSON；失败时 stderr 输出结构化错误并返回非零退出码，方便 Agent 或脚本判断结果。
+> 请使用已安装的 bruce-md2word 严格导出 fixtures/综合测试.md，返回实际文件路径和所有警告。随后对照源文件中的验收清单，说明哪些检查已经完成，哪些需要在 Word 中人工确认。
 
 ## 开发与验证
 
@@ -188,7 +192,7 @@ node lib/cli.js fixtures/综合测试.md --strict -o output/综合测试.docx
 
 自动化测试覆盖转换内容、样式 XML、DSH 服务集成、资源限制、取消和独立安装包。Word 的实际分页、字体及视觉效果仍需人工检查，完整 Web/Desktop 交互验收也应单独进行。
 
-[更新日志](CHANGELOG.md) · [自动化检查](https://github.com/bruc3van/dsh-md2word/actions) · [发布流程](docs/releasing.md)
+[更新日志](CHANGELOG.md) · [自动化检查](https://github.com/bruc3van/bruce-md2word/actions) · [发布流程](docs/releasing.md)
 
 ## 许可证
 

@@ -14,14 +14,16 @@
 
 ## npm 发布配置
 
-发布目标为 `bruce-md2word`，CLI 和 Skill 同名，不提供旧命令别名。GitHub 仓库仍为 `bruc3van/dsh-md2word`。首次发布新包名之前，需确认新包的发布权限与 Trusted Publisher 配置；旧包的授权不能作为新包已配置的依据。
+发布目标为 `bruce-md2word`，CLI 和 Skill 同名，不提供旧命令别名。GitHub 仓库为 `bruc3van/bruce-md2word`。首次发布新包名之前，需确认新包的发布权限与 Trusted Publisher 配置；旧包的授权不能作为新包已配置的依据。
 
 工作流通过 npm Trusted Publishing（OIDC）发布，无需长期 `NPM_TOKEN`。维护仓库或工作流时，需同步检查 npm 包 Settings → Trusted Publisher 中的配置：
 
 - Owner：`bruc3van`
-- Repository：`dsh-md2word`
+- Repository：`bruce-md2word`
 - Workflow filename：`release.yml`
 - Environment：留空，与当前工作流一致
 - Allowed actions：允许直接 `npm publish`
+
+使用支持 `npm trust` 的 npm CLI 时，可执行 `npm trust github bruce-md2word --repository bruc3van/bruce-md2word --file release.yml --allow-publish` 配置，再用 `npm trust list bruce-md2word` 核对。npm 可能要求账号二次验证；仓库改名后也需同步这里的 repository。
 
 工作流使用 GitHub 托管 runner、Node.js 24 和 `id-token: write`。首次创建新包可先通过 npm 登录完成发布，再配置新包的 Trusted Publisher。如果版本已存在，会跳过 npm 发布；GitHub Release 附件使用从 npm 重新获取的该版本 tarball，保证两处安装包一致。排查授权问题时应检查实际发布步骤日志，不能仅看工作流是否为绿色。

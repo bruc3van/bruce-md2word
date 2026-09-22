@@ -1,3 +1,7 @@
+# 未发布
+
+- GitHub 仓库统一为 `bruc3van/bruce-md2word`，同步仓库链接与 npm 发布配置；README 并列呈现中文 Skill + CLI 和 DSH 插件入口。
+
 # v0.3.0
 
 - npm 包、CLI 命令和 DSH 插件标识统一为 `bruce-md2word`，不保留旧 CLI 别名；同步安装文档、示例、锁文件和发布工作流。GitHub 仓库地址保持不变。
