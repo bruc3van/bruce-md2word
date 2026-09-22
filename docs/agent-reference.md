@@ -120,6 +120,8 @@ CLI 在执行环境中读取文件、运行转换 worker，完成写入后才原
 
 ## 验证边界
 
-自动化测试覆盖转换、实际 DSH 服务和独立安装包，不等同于完整 Web/Desktop 交互、真实受限沙箱或 Word 视觉验收。平台与版本记录见 [验证记录](verification.md)。
+自动化测试覆盖转换、实际 DSH 服务和独立安装包，运行结果见 [GitHub Actions](https://github.com/bruc3van/dsh-md2word/actions)。这些测试不等同于完整 Web/Desktop 交互、真实受限沙箱或 Word 视觉验收。
+
+README 的三份展示样例已使用 Microsoft Word 原生渲染检查，复现方式见 [截图说明](assets/README.md)。全部测试文档的逐页视觉检查、公式编辑交互、完整 DSH Web/Desktop 操作及各平台受限沙箱端到端验收尚未完成。
 
 Windows 普通权限下使用目录 junction 验证路径越界防护。独立的文件符号链接测试需要开发者模式或创建符号链接权限；本地缺少权限时明确标记跳过，CI 缺少权限则失败。

@@ -172,7 +172,7 @@ node lib/cli.js fixtures/综合测试.md --strict -o output/综合测试.docx
 
 自动化测试覆盖转换内容、样式 XML、DSH 服务集成、资源限制、取消和独立安装包。Word 的实际分页、字体及视觉效果仍需人工检查，完整 Web/Desktop 交互验收也应单独进行。
 
-[验证记录](docs/verification.md) · [GitHub Actions](https://github.com/bruc3van/dsh-md2word/actions) · [实施方案](docs/implementation-plan.md) · [发布说明](docs/releasing.md)
+[更新日志](CHANGELOG.md) · [自动化检查](https://github.com/bruc3van/dsh-md2word/actions) · [发布流程](docs/releasing.md)
 
 ## 许可证
 

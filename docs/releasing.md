@@ -1,40 +1,25 @@
-# 发布
+# 发布流程
 
-采用与 dsh-desktop-safe-market 相同的 tag 触发流程：测试通过后发布 npm，再创建 GitHub Release。Release 附带构建好的 `.tgz`，可直接通过 `dsh plugin add` 安装；GitHub 自动生成的源码压缩包不包含 `lib/`。
+推送 `vX.Y.Z` tag 触发 [Release 工作流](../.github/workflows/release.yml)：三平台测试通过后发布 npm，再创建 GitHub Release 并附上构建好的 `.tgz`。GitHub 自动生成的源码压缩包不包含 `lib/`，安装应使用 npm 包或 Release 中的 `.tgz`。
 
-## 首次发布
+## 发布步骤
 
-npm Trusted Publishing 需要先有包。维护者使用 `npm login --auth-type=web` 登录，在 Node.js 24 下完成 `npm test`、`npm run test:pack`、`npm pack`，再执行 `npm publish ./dsh-md2word-<version>.tgz --access public`。
+1. 在 Node.js 24 下执行 `npm version <新版本> --no-git-tag-version`，同步更新两个包清单；更新 README 安装版本和 `CHANGELOG.md`。
+2. 执行 `npm ci`、`npm run typecheck`、`npm test`、`npm run test:pack`。
+3. 提交并推送 `main`，创建与包版本一致的 `vX.Y.Z` tag 并推送。tag 必须指向包含版本变更的提交。
+4. 确认 Release 工作流成功，GitHub Release 已公开且包含 `.tgz`，npm 新版本及 `latest` 已更新。
+5. 在独立目录安装公开 npm 包并运行转换冒烟，核对 npm 包与 GitHub Release 附件一致。npm 可能需要几分钟处理新版本，发布命令成功不等于立即可安装。
 
-首次发布后，在 npm 包 Settings → Trusted Publisher 配置 GitHub Actions：
+仅在 GitHub 页面创建 Release 不会触发发布工作流。已发布版本不可覆盖，修复应使用新版本号。CI 和安装包验证不能替代 Word 版面及完整宿主交互验收。
+
+## npm 发布配置
+
+工作流通过 npm Trusted Publishing（OIDC）发布，无需长期 `NPM_TOKEN`。维护仓库或工作流时，需同步检查 npm 包 Settings → Trusted Publisher 中的配置：
 
 - Owner：`bruc3van`
 - Repository：`dsh-md2word`
 - Workflow filename：`release.yml`
-- Environment：留空（工作流未设置 environment）
-- Allowed actions：允许直接 `npm publish`；仅允许 `npm stage publish` 不满足当前自动发布流程。
+- Environment：留空，与当前工作流一致
+- Allowed actions：允许直接 `npm publish`
 
-配置入口：https://www.npmjs.com/package/dsh-md2word → Settings → Trusted Publisher。Workflow filename 只填写文件名，不填写 `.github/workflows/`。工作流已使用 GitHub 托管 runner、Node.js 24 和 `id-token: write`，无需添加 `NPM_TOKEN` Secret。要求 npm CLI 至少为 11.5.1，参见 [npm 官方说明](https://docs.npmjs.com/trusted-publishers/)。
-
-授权完成后，后续 tag 发布使用 OIDC，不保存长期 npm token。首次 tag 如发现版本已存在，会跳过 npm 发布并创建 GitHub Release。未配置 Trusted Publisher 时，后续新版本的自动发布会失败。
-
-## 后续版本
-
-1. 同步更新 `package.json`、`package-lock.json`、README 的安装版本及 `CHANGELOG.md`。
-2. 使用 Node.js 24 运行 `npm ci`、`npm test`、`npm run test:pack`。
-3. 提交并推送 `main`，创建与包版本一致的 `vX.Y.Z` tag 并推送。
-4. 检查 Release 工作流完成、GitHub Release 附件及 npm 版本。CI 通过不代替 Word 版面或 Windows 实机验收。
-
-已发布的版本不可覆盖；发现问题应增加版本号重新发布。
-
-例如发布 `0.2.0`，先执行 `npm version 0.2.0 --no-git-tag-version` 同步两个包清单，再更新 README 和 CHANGELOG、完成测试并提交。之后执行：
-
-```sh
-git push origin main
-git tag -a v0.2.0 -m "Release v0.2.0"
-git push origin v0.2.0
-```
-
-tag 必须指向包含版本变更和发布工作流的提交。仅在 GitHub 页面创建 Release 不是本工作流的触发条件；触发条件是推送 tag。
-
-2026-09-22 核查：npm 已有 `0.1.3`，GitHub 的 `v0.1.3` Release 工作流成功，但日志明确显示跳过已有 npm 版本。因此这次绿色运行不能证明 Trusted Publisher 授权有效；需通过新版本发布验证。
+工作流使用 GitHub 托管 runner、Node.js 24 和 `id-token: write`。如果版本已存在，会跳过 npm 发布；排查授权问题时应检查实际发布步骤日志，不能仅看工作流是否为绿色。
