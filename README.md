@@ -33,21 +33,35 @@ Agent 可以导出已有 Markdown 文件，也可以直接传入生成的正文�
 
 ## 选择安装方式
 
-通用 Agent 选择Skill + CLI；DSH 用户选择插件。两种方式复用同一转换引擎，无需同时安装。
+通用 Agent 选择 Skill + CLI；DSH 用户选择插件。两种方式复用同一转换引擎，无需同时安装。
 
 ### 方式一：Skill + CLI
 
-#### 安装Skill
+#### 安装 Skill
 
 Skill 名称为 `bruce-md2word`，支持按名称调用的 Agent 可使用该名称选择技能；npm 包名和 CLI 命令也统一为 `bruce-md2word`。
 
 仓库提供独立的 [Skill](skills/bruce-md2word/SKILL.md)，指导具备命令执行能力的 Agent 调用 CLI、处理诊断并交付真实文件路径。它不依赖 DSH 服务，与插件内部调用 `word_export` 的引导说明分别使用。
 
-将源码中的整个 `skills/bruce-md2word/` 目录复制到目标 Agent 配置的技能目录，保留 `SKILL.md` 和 `references/`。按该 Agent 的方式重新加载技能。可直接给 Agent 以下指令：
+推荐使用 [skills CLI](https://github.com/vercel-labs/skills) 安装：
 
-> 请从 https://github.com/bruc3van/bruce-md2word 获取 skills/bruce-md2word 技能目录，安装到当前 Agent 的技能目录，保留 references 子目录。检查 Node.js 24 并安装独立 CLI，然后使用该技能将 docs/报告.md 严格导出为 Word，返回真实路径和警告。
+```sh
+npx skills add bruc3van/bruce-md2word --skill bruce-md2word
+```
 
-Skill 随 `bruce-md2word` npm 包分发，可从安装包根目录下的 `skills/bruce-md2word/` 复制，也可从源码获取。不同 Agent 的技能目录和发现机制以其配置为准；这里提供通用文件格式和 CLI 工作流，不表示已逐一验证所有 Agent。不支持自动发现 Skill 的 Agent，可将其作为项目指令读取。
+默认安装到当前项目；添加 `-g` 可安装到用户级目录，添加 `-a <agent>` 可指定目标 Agent。安装后按目标 Agent 的方式重新加载技能。
+
+**安装 Skill 不会自动安装转换 CLI。** 请在 Node.js 24 环境中另行安装：
+
+```sh
+npm install -g bruce-md2word@0.3.0
+```
+
+也可以直接让 Agent 帮你完成：
+
+> 请检查 Node.js 24，使用 npx skills add bruc3van/bruce-md2word --skill bruce-md2word 安装到当前 Agent 的项目技能目录，并安装 bruce-md2word@0.3.0 CLI。然后将 docs/报告.md 严格导出为 Word，返回真实路径和警告。
+
+需要手动安装时，将源码或 npm 包中的整个 `skills/bruce-md2word/` 目录复制到目标 Agent 的技能目录，保留 `SKILL.md` 和 `references/`。不同 Agent 的技能目录和发现机制以其配置为准；不支持自动发现 Skill 的 Agent，可将其作为项目指令读取。安装器识别成功不代表已逐一验证所有 Agent 的实际调用。
 
 #### 直接使用 CLI
 
