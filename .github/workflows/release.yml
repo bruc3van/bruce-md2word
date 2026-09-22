@@ -42,7 +42,15 @@ jobs:
         run: |
           set -euo pipefail
           version=$(node -p 'require("./package.json").version')
-          npm pack "bruce-md2word@$version" --ignore-scripts --registry=https://registry.npmjs.org
+          for attempt in {1..20}; do
+            if npm pack "bruce-md2word@$version" --ignore-scripts --prefer-online --registry=https://registry.npmjs.org; then
+              exit 0
+            fi
+            echo "Published package is not available yet (attempt $attempt/20)."
+            if [ "$attempt" -lt 20 ]; then sleep 15; fi
+          done
+          echo "Timed out waiting for the published npm tarball." >&2
+          exit 1
       - name: Create GitHub release with prebuilt package
         env:
           GH_TOKEN: ${{ github.token }}
