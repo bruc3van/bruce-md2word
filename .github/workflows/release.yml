@@ -32,13 +32,19 @@ jobs:
           set -euo pipefail
           version=$(node -p 'require("./package.json").version')
           # The first version may have been bootstrapped through npm web login.
-          if npm view "dsh-md2word@$version" version --registry=https://registry.npmjs.org 2>/dev/null | grep -Fx "$version"; then
+          if npm view "bruce-md2word@$version" version --registry=https://registry.npmjs.org 2>/dev/null | grep -Fx "$version"; then
             echo "Version already published; skipping immutable npm version."
           else
-            npm publish "dsh-md2word-$version.tgz" --access public --provenance
+            npm publish "bruce-md2word-$version.tgz" --access public --provenance
           fi
+      - name: Use the published npm tarball for the release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p 'require("./package.json").version')
+          npm pack "bruce-md2word@$version" --ignore-scripts --registry=https://registry.npmjs.org
       - name: Create GitHub release with prebuilt package
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dsh-md2word-*.tgz --verify-tag --title "$TAG" --notes-file CHANGELOG.md
+        run: gh release create "$TAG" bruce-md2word-*.tgz --verify-tag --title "$TAG" --notes-file CHANGELOG.md

@@ -1,4 +1,6 @@
-# dsh-md2word
+# bruce-md2word
+
+当前源码的 npm 包、CLI 和 Skill 统一命名为 `bruce-md2word`，不保留旧 CLI 别名。GitHub 仓库地址保持不变。
 
 **面向 AI Agent 的 Markdown 转 Word 工具：开箱即用的中文排版、Mermaid 图表转图片、可编辑数学公式。**
 
@@ -45,16 +47,16 @@ Agent 可以导出已有 Markdown 文件，也可以直接传入生成的正文�
 当前包要求 Node.js `>=24 <25`、DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`、Cordis `4.0.2`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add dsh-md2word@0.2.0
+dsh plugin --profile web add bruce-md2word@0.3.0
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add dsh-md2word@0.2.0
+npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.3.0
 ```
 
-安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/dsh-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
+安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
 
 </details>
 
@@ -135,16 +137,30 @@ Mermaid 使用本地轻量渲染器，不覆盖官方全部语法。饼图、甘
 
 ## 在其他 Agent 或脚本中使用
 
+### 安装中文 Skill
+
+Skill 名称为 `bruce-md2word`，支持按名称调用的 Agent 可使用该名称选择技能；npm 包名和 CLI 命令也统一为 `bruce-md2word`。
+
+仓库提供独立的 [中文 Skill](skills/bruce-md2word/SKILL.md)，指导具备命令执行能力的 Agent 调用 CLI、处理诊断并交付真实文件路径。它不依赖 DSH 服务，与插件内部调用 `word_export` 的引导说明分别使用。
+
+将源码中的整个 `skills/bruce-md2word/` 目录复制到目标 Agent 配置的技能目录，保留 `SKILL.md` 和 `references/`。按该 Agent 的方式重新加载技能。可直接给 Agent 以下指令：
+
+> 请从 https://github.com/bruc3van/dsh-md2word 获取 skills/bruce-md2word 中文技能目录，安装到当前 Agent 的技能目录，保留 references 子目录。检查 Node.js 24 并安装独立 CLI，然后使用该技能将 docs/报告.md 严格导出为 Word，返回真实路径和警告。
+
+Skill 随 `bruce-md2word` npm 包分发，可从安装包根目录下的 `skills/bruce-md2word/` 复制，也可从源码获取。不同 Agent 的技能目录和发现机制以其配置为准；这里提供通用文件格式和 CLI 工作流，不表示已逐一验证所有 Agent。不支持自动发现 Skill 的 Agent，可将其作为项目指令读取。
+
+### 独立 CLI
+
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24，然后安装 dsh-md2word@0.2.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.3.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g dsh-md2word@0.2.0
-dsh-md2word docs/报告.md --strict -o output/项目报告.docx
-dsh-md2word --help
+npm install -g bruce-md2word@0.3.0
+bruce-md2word docs/报告.md --strict -o output/项目报告.docx
+bruce-md2word --help
 ```
 
 CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正文含相对图片时使用 `--asset-base-dir`。省略 `-o` 时输出到当前目录的 `output/`；显式指定输出目录时，其父目录须已存在。同名文件自动编号，无覆盖选项。

@@ -18,7 +18,7 @@ test('project tool waits for shell, unloads with it and exports after service re
   const h = await harness({ delivery: 'project' }, undefined, { fs: false, attachments: false });
   try {
     assert.equal(h.ctx.tools.get('word_export'), undefined);
-    assert.equal((await h.ctx.skills.list()).some(skill => skill.name === 'dsh-md2word'), false);
+    assert.equal((await h.ctx.skills.list()).some(skill => skill.name === 'bruce-md2word'), false);
     await h.ctx.plugin(LocalSubprocess);
     const provider = process.platform === 'win32' ? LocalPwsh : LocalBash;
     for (let i = 0; i < 2; i++) {
@@ -27,7 +27,7 @@ test('project tool waits for shell, unloads with it and exports after service re
       assert.equal((await h.call(args)).isError, false);
       await shellFiber.dispose();
       assert.equal(h.ctx.tools.get('word_export'), undefined);
-      assert.equal((await h.ctx.skills.list()).some(skill => skill.name === 'dsh-md2word'), false);
+      assert.equal((await h.ctx.skills.list()).some(skill => skill.name === 'bruce-md2word'), false);
     }
   } finally { await h.close(); }
 });
@@ -112,7 +112,7 @@ test('plugin unload cancels active conversion, removes tool and guidance', async
     await h.fiber.dispose();
     assert.equal((await task).isError, true);
     assert.equal(h.ctx.tools.get('word_export'), undefined);
-    assert.equal((await h.ctx.skills.list()).some(skill => skill.name === 'dsh-md2word'), false);
+    assert.equal((await h.ctx.skills.list()).some(skill => skill.name === 'bruce-md2word'), false);
   } finally { await h.close(); }
 });
 test('attachment errors are preserved; the target registry renders their message without metadata', async () => {

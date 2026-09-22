@@ -11,7 +11,7 @@ import { runWorker } from './runtime/worker-client.js';
 import { saveFile } from './runtime/save-file.js';
 import { ExportError } from './runtime/errors.js';
 
-const help = `Usage: dsh-md2word <input.md | -> [-o output.docx] [--strict] [--asset-base-dir directory]
+const help = `Usage: bruce-md2word <input.md | -> [-o output.docx] [--strict] [--asset-base-dir directory]
 
 Convert UTF-8 Markdown to editable DOCX. '-' reads Markdown from stdin.
 Default output: ./output/<input-name>.docx (document.docx for stdin).

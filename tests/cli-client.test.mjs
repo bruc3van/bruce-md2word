@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runCli } from '../lib/runtime/cli-client.js';
 import { resolveConfig } from '../lib/config.js';
-const config = resolveConfig({ workspaceRoot: '/workspace', cliCommand: 'dsh-md2word' });
+const config = resolveConfig({ workspaceRoot: '/workspace', cliCommand: 'bruce-md2word' });
 const args = { source: { kind: 'markdown', text: '$(do-not-run)' } };
 const success = { protocol: 1, path: '/workspace/output/document.docx', fileName: 'document.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', sizeBytes: 100, warnings: [] };
 const runResult = value => ({ exitCode: 0, signal: null, timedOut: false, aborted: false, timeoutMs: 1000, stdout: { text: JSON.stringify(value), truncated: false }, stderr: { text: '', truncated: false } });
@@ -18,7 +18,7 @@ test('CLI adapter passes session cwd, policy and signal without interpolating mo
   assert.equal(spec.workdir, session.header.cwd);
   assert.equal(spec.sandboxPolicy, policy);
   assert.equal(spec.signal, signal);
-  assert.equal(spec.command, 'dsh-md2word --request');
+  assert.equal(spec.command, 'bruce-md2word --request');
   assert.equal(JSON.parse(spec.stdin).input.source.text, args.source.text);
 });
 

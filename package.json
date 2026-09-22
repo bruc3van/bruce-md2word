@@ -1,6 +1,6 @@
 {
-  "name": "dsh-md2word",
-  "version": "0.2.0",
+  "name": "bruce-md2word",
+  "version": "0.3.0",
   "description": "面向 AI Agent 的 Markdown 转 Word 工具，提供开箱即用的中文排版、Mermaid 图表转图片和可编辑数学公式，支持 DSH 插件与独立 CLI。",
   "type": "module",
   "main": "lib/index.js",
@@ -15,6 +15,7 @@
   },
   "files": [
     "lib",
+    "skills",
     "!lib/**/*.map",
     "cordis.patch.yml",
     "LICENSE",
@@ -95,7 +96,7 @@
     "typescript": "^6.0.3"
   },
   "bin": {
-    "dsh-md2word": "lib/cli.js"
+    "bruce-md2word": "lib/cli.js"
   },
   "homepage": "https://github.com/bruc3van/dsh-md2word#readme",
   "bugs": {

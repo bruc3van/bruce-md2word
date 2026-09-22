@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import * as plugin from '../lib/index.js';
 export async function harness(config = {}, module = plugin, services = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-md2word-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'bruce-md2word-'));
   const ctx = new Context();
   await ctx.plugin(SystemPrompt);
   await ctx.plugin(ToolRuntime);

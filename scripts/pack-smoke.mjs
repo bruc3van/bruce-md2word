@@ -13,6 +13,10 @@ const temp = await mkdtemp(path.join(os.tmpdir(), 'md2word-pack-'));
 let tarball;
 try {
   const manifest = JSON.parse(npm(['pack', '--json'], { encoding: 'utf8', cwd: root }));
+  if (manifest[0].name !== 'bruce-md2word') throw new Error('Unexpected package name');
+  for (const required of ['skills/bruce-md2word/SKILL.md', 'skills/bruce-md2word/references/diagnostics.md']) {
+    if (!manifest[0].files.some(file => file.path === required)) throw new Error('Missing packed skill file: ' + required);
+  }
   tarball = path.join(root, manifest[0].filename);
   await writeFile(path.join(temp, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
   npm(['install', '--ignore-scripts', '--no-audit', '--no-fund', tarball, '@deepseek-ai/dsh-fs-local@0.1.6-alpha.2', '@deepseek-ai/dsh-attachment-local@0.1.6-alpha.2', '@deepseek-ai/dsh-subprocess-local@0.1.6-alpha.2', `@deepseek-ai/dsh-${process.platform === 'win32' ? 'pwsh' : 'bash'}-local@0.1.6-alpha.2`], { cwd: temp, stdio: 'inherit' });
@@ -27,7 +31,7 @@ import LocalSubprocess from '@deepseek-ai/dsh-subprocess-local';
 import LocalShell from '@deepseek-ai/dsh-${process.platform === 'win32' ? 'pwsh' : 'bash'}-local';
 import { readFile } from 'node:fs/promises';
 import JSZip from 'jszip';
-import * as plugin from 'dsh-md2word';
+import * as plugin from 'bruce-md2word';
 const ctx = new Context();
 try {
   await ctx.plugin(SystemPrompt); await ctx.plugin(ToolRuntime);
@@ -54,11 +58,12 @@ try {
 } finally { await ctx.fiber.dispose(); }
 `);
   execFileSync(process.execPath, [path.join(temp, 'smoke.mjs')], { cwd: temp, stdio: 'inherit' });
-  const cli = path.join(temp, 'node_modules', 'dsh-md2word', 'lib', 'cli.js');
-  const result = JSON.parse(execFileSync(process.execPath, [cli, '-', '-o', 'packed.docx'], { cwd: temp, input: '# Packed CLI\n\n中文与 **bold** $x_i^2$\n\n~~~mermaid\ngraph TD\nA[中文请求]-->B[完成]\n~~~', encoding: 'utf8' }));
+  const { readFile } = await import('node:fs/promises');
+  const installed = JSON.parse(await readFile(path.join(temp, 'node_modules', 'bruce-md2word', 'package.json'), 'utf8'));
+  if (Object.keys(installed.bin).join() !== 'bruce-md2word' || installed.bin['bruce-md2word'] !== 'lib/cli.js') throw new Error('Unexpected CLI entry points');
+  const result = JSON.parse(npm(['exec', '--offline', '--', 'bruce-md2word', '-', '--strict', '-o', 'packed.docx'], { cwd: temp, input: '# Packed CLI\n\n中文与 **bold** $x_i^2$\n\n~~~mermaid\ngraph TD\nA[中文请求]-->B[完成]\n~~~', encoding: 'utf8' }));
   if (result.protocol !== 1 || result.fileName !== 'packed.docx' || result.sizeBytes <= 0 || result.warnings.length) throw new Error('Invalid packaged CLI result');
   const { default: JSZip } = await import('jszip');
-  const { readFile } = await import('node:fs/promises');
   const packedZip = await JSZip.loadAsync(await readFile(result.path));
   if (!(await packedZip.file('word/document.xml').async('string')).includes('<w:drawing>')) throw new Error('Packaged Mermaid image missing');
   if (!(await packedZip.file('word/document.xml').async('string')).includes('<m:sSubSup>')) throw new Error('Packaged native equation missing');

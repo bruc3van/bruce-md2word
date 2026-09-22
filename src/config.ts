@@ -42,14 +42,14 @@ export const Config: z<Config> = z.object({
 });
 export function resolveConfig(config: Config = {}): ResolvedConfig {
   const result = { ...defaults, ...config, allowedReadRoots: config.allowedReadRoots ?? [], skill: config.skill ?? true, delivery: config.delivery ?? 'project' };
-  if (result.cliCommand !== undefined && (!result.cliCommand.trim() || /[\r\n\0]/.test(result.cliCommand))) throw new Error('dsh-md2word: invalid cliCommand');
-  if (!['project', 'attachment'].includes(result.delivery)) throw new Error('dsh-md2word: invalid delivery');
+  if (result.cliCommand !== undefined && (!result.cliCommand.trim() || /[\r\n\0]/.test(result.cliCommand))) throw new Error('bruce-md2word: invalid cliCommand');
+  if (!['project', 'attachment'].includes(result.delivery)) throw new Error('bruce-md2word: invalid delivery');
   for (const key of Object.keys(defaults) as (keyof Limits)[]) {
-    if (!Number.isSafeInteger(result[key]) || result[key] < (key === 'queueSize' ? 0 : 1)) throw new Error(`dsh-md2word: invalid ${key}`);
+    if (!Number.isSafeInteger(result[key]) || result[key] < (key === 'queueSize' ? 0 : 1)) throw new Error(`bruce-md2word: invalid ${key}`);
   }
-  if (result.timeoutMs > 2_147_483_647) throw new Error('dsh-md2word: timeoutMs exceeds timer range');
+  if (result.timeoutMs > 2_147_483_647) throw new Error('bruce-md2word: timeoutMs exceeds timer range');
   for (const root of [result.workspaceRoot, ...result.allowedReadRoots]) {
-    if (root !== undefined && (!root.trim() || !path.isAbsolute(root))) throw new Error('dsh-md2word: roots must be absolute local-provider paths');
+    if (root !== undefined && (!root.trim() || !path.isAbsolute(root))) throw new Error('bruce-md2word: roots must be absolute local-provider paths');
   }
   return result;
 }
