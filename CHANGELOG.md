@@ -1,5 +1,7 @@
 # 未发布
 
+- 将 `jszip` 从 `3.10.1` 升级到 `3.10.2`，包含二进制类型识别、Node.js Blob 支持和类型声明修复。
+
 - 将 `markdown-it` 从 `14.1.1` 升级到 `14.3.2`，修复 smartquotes 拒绝服务告警 GHSA-6v5v-wf23-fmfq；继续关闭 typographer。
 
 - CLI 新增 `--version` / `-v`，输出实际安装包版本；Skill 优先使用该入口检查版本，保留旧版查询方式。

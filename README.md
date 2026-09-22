@@ -65,7 +65,7 @@ Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，会指导 
 | `jsdom` | `27.4.0` | 在本地解析 HTML、XML、MathML 和生成的 SVG；不启动浏览器。 |
 | `sharp` | `0.35.4` | 解码和处理图片，将生成的图表栅格化为 PNG；包含平台相关原生依赖。 |
 | `bmp-js` | `0.1.0` | 解码支持的 BMP 图片。 |
-| `jszip` | `3.10.1` | 检查 DOCX 压缩包结构及内部资源。 |
+| `jszip` | `3.10.2` | 检查 DOCX 压缩包结构及内部资源。 |
 | `@deepseek-ai/schemastery` | `3.18.2` | 定义配置与参数校验 Schema。 |
 | `beautiful-mermaid` | `1.1.3` | Mermaid 图表布局与 SVG 生成；经本项目适配后在构建时打包，用户无需另装。 |
 
