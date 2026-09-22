@@ -82,7 +82,7 @@ DSH 插件另外依赖宿主的 Cordis、工具、文件和执行器服务：当
 
 锁定版本用于复现构建，不代表依赖永远没有漏洞。可在源码目录执行 `npm audit --omit=dev` 查看当前运行依赖报告。
 
-当前源码已将 `markdown-it` 升级到 `14.3.2`，修复旧依赖的 smartquotes 告警（[GHSA-6v5v-wf23-fmfq](https://github.com/advisories/GHSA-6v5v-wf23-fmfq)）。2026-09-22 对当前锁文件执行 `npm audit --omit=dev`，报告为 0 项已知漏洞；这不等于不存在未知风险，后续以实时审计结果为准。已发布的 `bruce-md2word@0.3.0` 尚未包含此依赖升级，修复将随下个版本发布。
+`bruce-md2word@0.3.1` 已将 `markdown-it` 升级到 `14.3.2`，修复旧依赖的 smartquotes 告警（[GHSA-6v5v-wf23-fmfq](https://github.com/advisories/GHSA-6v5v-wf23-fmfq)）。2026-09-22 对当前锁文件执行 `npm audit --omit=dev`，报告为 0 项已知漏洞；这不等于不存在未知风险，后续以实时审计结果为准。使用 `0.3.0` 或更早版本的用户应升级到 `0.3.1` 或更新版本。
 
 </details>
 
@@ -111,7 +111,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.3.0
+npm install -g bruce-md2word@0.3.1
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -124,12 +124,12 @@ npm install -g bruce-md2word@0.3.0
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.3.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.3.1 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.3.0
+npm install -g bruce-md2word@0.3.1
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -152,13 +152,13 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 当前包要求 Node.js `>=24 <25`、DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`、Cordis `4.0.2`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.3.0
+dsh plugin --profile web add bruce-md2word@0.3.1
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.3.0
+npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.3.1
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
