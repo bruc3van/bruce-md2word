@@ -6,7 +6,7 @@ import { CONTENT_WIDTH, MAX_IMAGE_HEIGHT, numberingLevels } from './styles.js';
 import type { Diagnostics } from './diagnostics.js';
 export interface EmbeddedImage { data: Uint8Array; type: 'png' | 'jpg' | 'gif' | 'bmp'; width: number; height: number; displayWidth?: number }
 type Block = Paragraph | Table;
-export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImage>, diagnostics: Diagnostics): { children: Block[]; numbering: INumberingOptions } {
+export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImage>, diagnostics: Diagnostics, formulas = new Map<string, ParagraphChild[]>()): { children: Block[]; numbering: INumberingOptions } {
   const dom = new JSDOM(`<body>${html}</body>`);
   const numbering: INumberingOptions['config'][number][] = [];
   let nextList = 0;
@@ -30,6 +30,12 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       if (node.nodeType !== 1) continue;
       const el = node as Element;
       const tag = el.tagName;
+      if (el.hasAttribute('data-math')) {
+        const formula = formulas.get(el.getAttribute('data-math')!);
+        if (!formula) throw new Error('Missing converted formula');
+        runs.push(...formula);
+        continue;
+      }
       if (tag === 'IMG') {
         const image = images.get(el.getAttribute('src') ?? '');
         if (image) {
@@ -70,6 +76,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
           && (!pending.length || !child.nextSibling || /^(UL|OL|P|PRE|TABLE|BLOCKQUOTE|HR|H[1-6])$/.test(child.nextSibling.nodeName))) continue;
         const tag = child.nodeName;
         if (tag === 'UL' || tag === 'OL') { flush(!numbered); result.push(...list(child as Element, level + 1)); }
+        else if (tag === 'P' && (child as Element).hasAttribute('data-math-block')) { flush(!numbered); result.push(...block(child, level)); }
         else if (tag === 'P') { flush(); pending.push(...child.childNodes); flush(!numbered); }
         else if (['PRE', 'TABLE', 'BLOCKQUOTE', 'HR', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tag)) { flush(!numbered); result.push(...block(child, level)); }
         else pending.push(child);
@@ -84,6 +91,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     const el = node as Element;
     const tag = el.tagName;
     if (/^H[1-6]$/.test(tag)) return [new Paragraph({ children: inline(el.childNodes), heading: HeadingLevel[`HEADING_${tag[1]}` as keyof typeof HeadingLevel] })];
+    if (tag === 'P' && el.hasAttribute('data-math-block')) return [new Paragraph({ children: inline(el.childNodes), alignment: AlignmentType.CENTER, indent: { firstLine: 0 }, spacing: { before: 160, after: 160 } })];
     if (tag === 'P' && el.hasAttribute('data-mermaid-notice')) return [new Paragraph({ children: [new TextRun({ text: el.textContent ?? '', color: '92400E', size: 20 })], indent: { firstLine: 0 }, spacing: { before: 160, after: 80 }, keepNext: true })];
     if (tag === 'P') return [new Paragraph({ children: inline(el.childNodes), ...(quote ? { style: 'Quote', ...(quoteAfter === undefined ? {} : { spacing: { after: quoteAfter } }) } : { indent: { firstLine: 480 } }) })];
     if (tag === 'PRE') {

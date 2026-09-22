@@ -13,7 +13,7 @@ export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordproc
 export function createWordExport(ctx: Context, config: ResolvedConfig, queue: TaskQueue) {
   return defineTool({
     name: 'word_export',
-    description: `Export Markdown as editable Word (.docx). ${config.delivery === 'project' ? 'Save in the current project output/ directory, never overwriting an existing file; return the actual file path.' : 'Save through the DSH attachment service.'} Images are limited to embedded PNG/JPEG/GIF/BMP or relative files in the document directory. Mermaid flowchart, state, sequence, class, ER and XY diagrams render locally as images using a lightweight renderer; not all Mermaid syntax is supported. Remote images are never fetched. Inspect warnings for missing images or unrendered Mermaid; strict rejects degraded output.`,
+    description: `Export Markdown as editable Word (.docx). ${config.delivery === 'project' ? 'Save in the current project output/ directory, never overwriting an existing file; return the actual file path.' : 'Save through the DSH attachment service.'} Images are limited to embedded PNG/JPEG/GIF/BMP or relative files in the document directory. Mermaid flowchart, state, sequence, class, ER and XY diagrams render locally as images using a lightweight renderer; not all Mermaid syntax is supported. LaTeX formulas convert to editable Word equations; unsupported formulas retain full source and emit MATH_NOT_CONVERTED degradation. Remote images are never fetched. Inspect warnings for missing images or unrendered Mermaid; strict rejects degraded output.`,
     parameters: {
       source: { required: true, oneOf: [
         { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'file', required: true }, path: { type: 'string', required: true, description: '.md or .markdown path, relative to the session working directory.' } } },
@@ -44,7 +44,7 @@ export function createWordExport(ctx: Context, config: ResolvedConfig, queue: Ta
         if (!attachments) throw new ExportError('Attachment delivery requires the DSH attachment service.', 'CONFIGURATION_ERROR');
         const result = await runWorker(input.markdown, config, signal, (refs, ioSignal) => acquireImages(ctx.fs, refs, input, config, ioSignal));
         signal.throwIfAborted();
-        if (args.strict && result.warnings.some(w => w.severity === 'degradation')) throw new ExportError('Strict export rejected incomplete content. Resolve missing/unsupported images or Mermaid before retrying.', 'CONTENT_INCOMPLETE');
+        if (args.strict && result.warnings.some(w => w.severity === 'degradation')) throw new ExportError('Strict export rejected incomplete content. Resolve missing/unsupported images, Mermaid or formulas before retrying.', 'CONTENT_INCOMPLETE');
         const attachment = await attachments.saveFile({ data: result.data, name: input.fileName });
         // Storage owns any committed object if cancellation races with saveFile.
         signal.throwIfAborted();

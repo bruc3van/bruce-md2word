@@ -1,20 +1,35 @@
 # dsh-md2word
 
-**让 AI Agent 把 Markdown 内容交付为可编辑的 Word 文档。**
+**面向 AI Agent 的 Markdown 转 Word 工具：开箱即用的中文排版、Mermaid 图表转图片、可编辑数学公式。**
 
-在 DeepSeek Harness（DSH）中，让 Agent 整理报告、编写方案或生成说明文档，再直接导出 `.docx`。标题、列表、表格和图片随内容一起转换，Mermaid 图表在本机渲染并嵌入，减少从对话复制到 Word 后重新排版的工作。
+让 Agent 写好的报告、方案和技术说明直接成为可交付的 `.docx`：中文内容自动应用预设排版，Mermaid 图表在本机渲染为图片并嵌入，LaTeX 数学公式转换为可继续编辑的 Word 原生公式，减少复制内容后重新排版、截图和录入公式的工作。
 
 提供 DSH 原生 `word_export` 工具，也提供独立 CLI，供具备命令执行能力的其他 Agent 和自动化脚本调用。
 
-## 从内容生成到文档交付
+## 三个特色功能
 
-- **交付可继续编辑的文件**：正文、标题、列表和表格转换为 Word 内容，方便审阅、修改与归档；Mermaid 图表以图片形式嵌入。
-- **沿用 Agent 的 Markdown 工作流**：既能导出已有 `.md` 文件，也能直接接收生成的 Markdown 正文，不必手工中转。
 - **开箱即用的中文排版**：A4 页面，正文宋体、标题黑体，覆盖六级标题、五级列表及常见文档元素；实际字体显示取决于阅读环境。
-- **把交付结果反馈给 Agent**：返回文件位置和结构化警告，便于修正缺失图片或不支持的图表；严格模式拒绝保存存在内容降级的文档。
-- **在运行环境本地转换**：安装依赖后，转换无需 Office、Python、浏览器或在线转换服务。默认保存到当前项目的 `output/`，同名文件自动编号。
+- **Mermaid 图表转图片**：将流程图、时序图、状态图、类图、ER 图和 XY 图的常用语法在本机渲染为 PNG，按比例嵌入 Word，支持中文标签，无需手工截图。
+- **可编辑的数学公式**：将 LaTeX 行内及块公式转换为 Word 原生公式，支持分式、根式、上下标、向量、求和积分、矩阵和分段函数，方便在 Word 中继续修改。
 
 适合项目报告、实施方案、会议纪要、技术说明等以结构化内容为主的文档。当前提供固定排版样式，不提供自定义 Word 模板接口。
+
+## 导出效果
+
+以下页面均由本项目 CLI 从 Markdown 导出为 DOCX，再使用 **Microsoft Word 原生渲染**截图。点击图片查看大图。
+
+| 开箱即用的中文排版 | Mermaid 图表转图片 | 可编辑的数学公式 |
+| :---: | :---: | :---: |
+| [![Word 中文排版：分级标题、正文、列表与表格](docs/assets/word-chinese.png)](docs/assets/word-chinese.png) | [![Word 中嵌入的中文 Mermaid 流程图和时序图](docs/assets/word-mermaid.png)](docs/assets/word-mermaid.png) | [![Word 原生公式：分式、求和、积分、矩阵和分段函数](docs/assets/word-math.png)](docs/assets/word-math.png) |
+| [查看 Markdown 源文件](fixtures/showcase/中文排版.md) | [查看 Markdown 源文件](fixtures/showcase/Mermaid图表.md) | [查看 Markdown 源文件](fixtures/showcase/数学公式.md) |
+
+截图使用工具默认样式，未对导出的 Word 进行额外排版。[截图生成方式](docs/assets/README.md)。
+
+## 融入 Agent 的文档交付流程
+
+Agent 可以导出已有 Markdown 文件，也可以直接传入生成的正文。正文、标题、列表和表格保持可编辑；工具返回实际文件位置和结构化警告，方便 Agent 修正缺失图片、不支持的图表或公式后重新导出。严格模式拒绝保存存在内容降级的文档。
+
+安装依赖后，转换在本地完成，无需 Office、Python、浏览器或在线转换服务。默认保存到当前项目的 `output/`，同名文件自动编号。
 
 ## 让 Agent 帮你安装
 
@@ -30,13 +45,13 @@
 当前包要求 Node.js `>=24 <25`、DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`、Cordis `4.0.2`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add dsh-md2word@0.1.4
+dsh plugin --profile web add dsh-md2word@0.2.0
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add dsh-md2word@0.1.4
+npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add dsh-md2word@0.2.0
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/dsh-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
@@ -89,12 +104,15 @@ npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add dsh-md2word@0.1.4
 | 结构化内容 | 表格、引用、行内代码、代码块、分隔线 |
 | 图片 | PNG、JPEG、GIF、BMP；支持目录内相对路径和内嵌图片数据 |
 | Mermaid | 流程图、状态图、时序图、类图、ER 图、XY 图的常用语法 |
+| 数学公式 | LaTeX 行内及块公式转为可编辑 Word 原生公式，覆盖分式、根式、上下标、向量、求和积分、矩阵、分段函数与对齐方程 |
 
 图片相对源 Markdown 所在目录解析；直接传正文时，通过 `assetBaseDir` 指定相对图片目录。网络图片不会自动下载，SVG 输入不受支持。
 
 Mermaid 使用本地轻量渲染器，不覆盖官方全部语法。饼图、甘特图以及部分配置和指令会触发未渲染警告。中文图表需要生成机器安装中文字体；宽图仍可能缩小到不易阅读，建议拆分。具体范围见 [图表参考](docs/agent-reference.md#mermaid-图表)。
 
-原始 HTML 按文本保留。数学公式、脚注和任务复选框等扩展语法不作为原生 Word 功能转换；这些记法可能仅按普通文本输出，未必触发警告。
+数学公式使用 Temml 在本地解析，通过自有转换层生成 Word 原生公式，无需浏览器、字体图片或外部转换服务。支持 `$...$`、`\(...\)` 行内公式，以及独立块中的 `$$...$$`、`\[...\]`。不支持的结构或错误语法保留完整源码并报告 `MATH_NOT_CONVERTED`，严格模式拒绝保存。自定义宏、公式编号与引用等暂不支持，具体边界见 [公式参考](docs/agent-reference.md#数学公式)。
+
+原始 HTML 按文本保留。脚注和任务复选框等扩展语法不作为原生 Word 功能转换；这些记法可能仅按普通文本输出，未必触发警告。
 
 ## 先用样例体验
 
@@ -106,6 +124,8 @@ Mermaid 使用本地轻量渲染器，不覆盖官方全部语法。饼图、甘
 | [异常降级测试](fixtures/异常降级测试.md) | 缺图、损坏数据、不支持的图表与严格模式失败行为 |
 | [完整样式](fixtures/完整样式.md) | 集中查看中文正文、标题和列表排版 |
 | [Mermaid 中文](fixtures/Mermaid中文.md) | 检查中文图表、长标签和混排效果 |
+| [数学公式](fixtures/数学公式.md) | 检查原生公式、矩阵、中文条件及 Word 编辑效果 |
+| [数学公式降级](fixtures/数学公式降级.md) | 检查公式原文保留、行号诊断及严格拒绝行为 |
 
 样例与配套图片位于源码仓库，不包含在 npm 安装包中。使用综合样例时，请保留 `fixtures/assets/` 的相对目录结构。
 
@@ -117,12 +137,12 @@ Mermaid 使用本地轻量渲染器，不覆盖官方全部语法。饼图、甘
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24，然后安装 dsh-md2word@0.1.4 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24，然后安装 dsh-md2word@0.2.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g dsh-md2word@0.1.4
+npm install -g dsh-md2word@0.2.0
 dsh-md2word docs/报告.md --strict -o output/项目报告.docx
 dsh-md2word --help
 ```
@@ -154,6 +174,6 @@ node lib/cli.js fixtures/综合测试.md --strict -o output/综合测试.docx
 
 [验证记录](docs/verification.md) · [GitHub Actions](https://github.com/bruc3van/dsh-md2word/actions) · [实施方案](docs/implementation-plan.md) · [发布说明](docs/releasing.md)
 
-## 许可证与致谢
+## 许可证
 
-采用 [MIT](LICENSE) 许可证。转换样式及部分实现来自 Bruce-doc-converter，版权和参考版本见 [NOTICE](NOTICE)；包内附带所用组件的许可证说明。
+采用 [MIT](LICENSE) 许可证。

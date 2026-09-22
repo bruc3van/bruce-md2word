@@ -1,4 +1,6 @@
-import { Document, Packer } from 'docx';
+import { Document, Packer, TextRun } from 'docx';
+import type { ParagraphChild } from 'docx';
+import { latexToWordMath } from './math.js';
 import { renderDiagram } from './mermaid.js';
 import sharp from 'sharp';
 import bmp from 'bmp-js';
@@ -65,7 +67,17 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
       parsed.diagnostics.add('MERMAID_NOT_RENDERED', 'Mermaid syntax or rendering is unsupported; source retained as code.', 'degradation', diagram.line);
     }
   }
-  const { children, numbering } = convertHTMLToDocx(html, images, parsed.diagnostics);
+  const formulas = new Map<string, ParagraphChild[]>();
+  for (const formula of parsed.formulas) {
+    try {
+      if (formula.unclosed) throw new Error('Unclosed formula delimiter');
+      formulas.set(formula.id, [latexToWordMath(formula.source, formula.display)]);
+    } catch {
+      parsed.diagnostics.add('MATH_NOT_CONVERTED', '公式未转换：语法无效、超出公式处理范围或不支持该结构；已保留完整源码。', 'degradation', formula.line);
+      formulas.set(formula.id, [new TextRun({ text: '[公式未转换] ', color: '92400E' }), ...formula.raw.split('\n').map((text, i) => new TextRun({ text, ...(i ? { break: 1 } : {}), font: 'Consolas' }))]);
+    }
+  }
+  const { children, numbering } = convertHTMLToDocx(html, images, parsed.diagnostics, formulas);
   const document = new Document({ styles: createStyles(), numbering, sections: [{ properties: { page: { size: { width: PAGE_WIDTH, height: PAGE_HEIGHT }, margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } }, children }] });
   const data = await Packer.toBuffer(document);
   if (data.byteLength > limits.maxOutputBytes) throw new ExportError('DOCX exceeds the configured output limit.', 'LIMIT_EXCEEDED');
