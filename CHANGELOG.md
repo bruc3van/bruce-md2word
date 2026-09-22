@@ -1,5 +1,7 @@
 # 未发布
 
+- 将 `markdown-it` 从 `14.1.1` 升级到 `14.3.2`，修复 smartquotes 拒绝服务告警 GHSA-6v5v-wf23-fmfq；继续关闭 typographer。
+
 - CLI 新增 `--version` / `-v`，输出实际安装包版本；Skill 优先使用该入口检查版本，保留旧版查询方式。
 
 - Skill 在首次使用时检查 CLI 的安装与版本，按需安装或更新后继续导出，并尊重指定版本、项目锁定版本和离线要求。

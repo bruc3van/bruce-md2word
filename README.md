@@ -59,7 +59,7 @@ Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，会指导 
 
 | 依赖 | 版本 | 用途 |
 | --- | --- | --- |
-| `markdown-it` | `14.1.1` | 解析 Markdown 结构；关闭原始 HTML 渲染、自动链接识别和 typographer。 |
+| `markdown-it` | `14.3.2` | 解析 Markdown 结构；关闭原始 HTML 渲染、自动链接识别和 typographer。 |
 | `docx` | `9.7.1` | 生成 Word 文档、样式、表格和原生数学公式。 |
 | `temml` | `0.13.5` | 将 LaTeX 解析为 MathML，再由本项目转换为 Word 原生公式。 |
 | `jsdom` | `27.4.0` | 在本地解析 HTML、XML、MathML 和生成的 SVG；不启动浏览器。 |
@@ -82,7 +82,7 @@ DSH 插件另外依赖宿主的 Cordis、工具、文件和执行器服务：当
 
 锁定版本用于复现构建，不代表依赖永远没有漏洞。可在源码目录执行 `npm audit --omit=dev` 查看当前运行依赖报告。
 
-2026-09-22 检查记录：`markdown-it 14.1.1` 有一项 smartquotes 规则的中等级别拒绝服务告警（[GHSA-6v5v-wf23-fmfq](https://github.com/advisories/GHSA-6v5v-wf23-fmfq)）。本项目在 [解析器配置](src/core/markdown.ts) 中显式设置 `typographer: false`，未启用公告所述触发规则；依赖本身仍在受影响版本范围内，不能据此宣称审计无告警。后续版本与新增公告以实时审计结果为准。
+当前源码已将 `markdown-it` 升级到 `14.3.2`，修复旧依赖的 smartquotes 告警（[GHSA-6v5v-wf23-fmfq](https://github.com/advisories/GHSA-6v5v-wf23-fmfq)）。2026-09-22 对当前锁文件执行 `npm audit --omit=dev`，报告为 0 项已知漏洞；这不等于不存在未知风险，后续以实时审计结果为准。已发布的 `bruce-md2word@0.3.0` 尚未包含此依赖升级，修复将随下个版本发布。
 
 </details>
 
