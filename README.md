@@ -11,24 +11,24 @@ Markdown → Word CLI 和原生 DeepSeek Harness 插件。CLI 可以独立使用
 从 [npm](https://www.npmjs.com/package/dsh-md2word) 安装到 DSH：
 
 ```sh
-dsh plugin --profile web add dsh-md2word@0.1.3
+dsh plugin --profile web add dsh-md2word@0.1.4
 ```
 
 如果使用 `npx` 启动 DSH：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add dsh-md2word@0.1.3
+npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add dsh-md2word@0.1.4
 ```
 
 将 `web` 换成实际使用的 profile。也可以直接发送给 Agent：
 
-> 请将 dsh-md2word@0.1.3 安装到我的 DSH web profile，使用官方 plugin add 命令；安装后提醒我重启服务。
+> 请将 dsh-md2word@0.1.4 安装到我的 DSH web profile，使用官方 plugin add 命令；安装后提醒我重启服务。
 
 安装后重启对应 profile。包的 `cordis.patch.yml` 加载插件；需要 `tools` 服务，项目模式还需要 `shell`，附件模式需要 `fs` 和 `attachments`。对应服务就绪后才注册 `word_export`；服务卸载会撤销工具、取消任务并等待清理，恢复后重新注册。`skills` 可选，存在时自动注册使用说明。插件默认调用包内 CLI，复用 DSH 的 Node 运行时，无需另行全局安装。
 
 ## 独立 CLI
 
-如需脱离 DSH 单独使用，可执行 `npm install -g dsh-md2word@0.1.3` 安装命令：
+如需脱离 DSH 单独使用，可执行 `npm install -g dsh-md2word@0.1.4` 安装命令：
 
 ```sh
 dsh-md2word docs/报告.md -o output/项目报告.docx
