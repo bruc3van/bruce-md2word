@@ -25,6 +25,18 @@
 
 截图使用工具默认样式，未对导出的 Word 进行额外排版。[截图生成方式](docs/assets/README.md)。
 
+## 单次实际转换测评
+
+以下结果基于**同一份 31 KB Markdown，每个 Skill 各运行一次**。样本包含标题、表格、六类 Mermaid 图和 6 个公式；耗时为该次任务的全流程用时，不代表其他文档或环境中的性能。
+
+| Skill（来源） | 成品效果 | 全流程耗时 | 手工编写代码与 token 消耗 | 主要优点 | 主要不足 |
+| --- | --- | --- | --- | --- | --- |
+| `bruce-md2word`（本项目） | **本次最好**。标题、表格和六类 Mermaid 图的结构与布局保留较完整；6 个公式为可编辑 Word 公式。 | **148.3 秒**，含首次安装 CLI | 无需编写转换代码；主要工作是检查、导出和验收；token 消耗最低。 | 严格模式一次导出成功；图形布局和公式保真度明显领先。 | 两张 Mermaid 图缩小后文字偏小；31 页中有些留白。 |
+| `documents:documents`（Codex 官方） | 主要文字、表格和普通图片可用；Mermaid 只保留节点与关系文字，未还原方向和布局；脚注、部分编号失真。 | **381.8 秒** | 需要从零编写 Python 转换脚本和制图代码。 | 可按需要控制文档生成逻辑；最终文件可直接用 Word 打开。 | 并非 Markdown 一键转换 Skill；本轮规定的渲染器因缺少 `soffice.exe` 无法运行；公式虽有可编辑对象，部分结构被简化。 |
+| `docx`（Anthropic 官方） | 有动态目录和原生脚注；普通图片、表格大体可用；Mermaid 布局未还原，块公式与表格内图片存在明显缺陷。 | **312.8 秒** | 需要从零编写 JavaScript 转换脚本并多次调试。 | `docx-js` 提供目录、脚注、表格和公式对象等构件。 | 初始文件虽通过附带的 XML 验证，Word 仍提示损坏；最终成品经 Word 修复另存，复杂内容保真不足。 |
+
+**本次样本的选择结论：**若目标是把现有复杂 Markdown 尽量忠实地转成 Word，`bruce-md2word` 最省人工且效果最好。另两个是通用的 Word 制作 Skill；本次转换效果很大程度取决于临时编写的脚本，不能算作它们自带的一键转换能力。耗时只是这份样本的单次结果。
+
 ## 融入 Agent 的文档交付流程
 
 Agent 可以导出已有 Markdown 文件，也可以直接传入生成的正文。正文、标题、列表和表格保持可编辑；工具返回实际文件位置和结构化警告，方便 Agent 修正缺失图片、不支持的图表或公式后重新导出。严格模式拒绝保存存在内容降级的文档。
@@ -112,7 +124,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.4.0
+npm install -g bruce-md2word@0.4.1
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -125,12 +137,12 @@ npm install -g bruce-md2word@0.4.0
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.4.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.4.1 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.4.0
+npm install -g bruce-md2word@0.4.1
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -153,13 +165,13 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 当前包要求 Node.js `>=24 <25`、DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`、Cordis `4.0.2`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.4.0
+dsh plugin --profile web add bruce-md2word@0.4.1
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.4.0
+npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.4.1
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
@@ -200,7 +212,7 @@ DSH 的 `word_export` 一次调用接收一个 Markdown 文件或一段正文，
 
 - `strict: true` 遇到缺失图片、不支持的图表等内容降级时拒绝保存；默认值为 `false`。
 - 普通模式允许保留替代文字或图表源码，并返回降级警告，适合排查问题。
-- `MERMAID_SMALL_TEXT` 是可读性提示，严格模式仍可成功；Agent 应继续检查图表。
+- `MERMAID_LAYOUT_ADJUSTED` 表示过宽的横向流程图已保留节点和连线、自动转为更易读的纵向布局；`MERMAID_SMALL_TEXT` 表示最终图中文字仍可能过小。两者都是可读性提示，严格模式仍可成功；Agent 应继续检查图表。
 - 成功返回文件路径、实际文件名、大小、MIME 类型及 `warnings`。路径来自本地运行环境，不是下载链接。
 
 严格模式通过表示未检测到内容降级，不代表文档事实正确或 Word 排版已验收。完整参数、诊断处理、附件模式与配置见 [Agent 接口与运行参考](docs/agent-reference.md)。

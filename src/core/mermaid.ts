@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import sharp from 'sharp';
 import type { Limits } from '../config.js';
-import type { EmbeddedImage } from './html-to-docx.js';
+import type { EmbeddedImage, ImageBounds } from './html-to-docx.js';
 import { ExportError } from '../runtime/errors.js';
 import { MAX_IMAGE_HEIGHT } from './styles.js';
 
@@ -54,9 +54,9 @@ export function staticDiagramSvg(svg: string): string {
   } finally { dom.window.close(); }
 }
 
-export interface RenderedDiagram extends EmbeddedImage { minTextPt: number }
+export interface RenderedDiagram extends EmbeddedImage { minTextPt: number; layoutAdjusted?: boolean }
 
-export async function renderDiagram(source: string, limits: Limits): Promise<RenderedDiagram> {
+export async function renderDiagram(source: string, limits: Limits, bounds: ImageBounds = { maxWidth: 560, maxHeight: MAX_IMAGE_HEIGHT }): Promise<RenderedDiagram> {
   if (Buffer.byteLength(source) > 50_000) throw new ExportError('Mermaid source exceeds the 50 KB diagram limit.', 'LIMIT_EXCEEDED');
   // The lightweight parser silently ignores some official directives; fail visibly.
   if (/^\s*(?:%%\{|---|click\s)/m.test(source)) throw new Error('Unsupported Mermaid configuration');
@@ -64,26 +64,50 @@ export async function renderDiagram(source: string, limits: Limits): Promise<Ren
   if (!/^(?:(?:flowchart|graph)\s+(?:TD|TB|BT|LR|RL)\b|stateDiagram(?:-v2)?\b|sequenceDiagram\b|classDiagram\b|erDiagram\b|xychart(?:-beta)?\b)/i.test(normalized)) throw new Error('Unsupported Mermaid diagram type');
   if (/^erDiagram\b/i.test(normalized) && /^\s*\S+\s+\S+(?:\s+(?:PK|FK|UK)[,\s]*)*\s+"[^"]*"\s*$/m.test(normalized)) throw new Error('ER field comments are not rendered');
   const { renderMermaidSVG } = await import('./mermaid-renderer.js');
-  const svg = staticDiagramSvg(renderMermaidSVG(normalized, {
-    font: 'sans-serif', bg: palette['--bg'], fg: palette['--fg'], line: palette['--line'],
-    accent: palette['--accent'], muted: palette['--muted'], surface: palette['--surface'], border: palette['--border'],
-    padding: 24, interactive: false,
-  }));
-  if (!/<text\b/.test(svg)) throw new Error('Empty diagram');
-  if (Buffer.byteLength(svg) > limits.maxImageBytes) throw new ExportError('Mermaid SVG exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
-  // 2x pixels keep labels crisp at their intended Word display size.
-  const input = Buffer.from(svg);
-  const meta = await sharp(input, { density: 144, limitInputPixels: false }).metadata();
-  const width = meta.width ?? 0, height = meta.height ?? 0;
-  if (!(width > 0 && height > 0) || width > limits.maxImageDimension || height > limits.maxImageDimension || width * height > limits.maxImagePixels) throw new ExportError('Mermaid dimensions exceed the configured limit.', 'LIMIT_EXCEEDED');
-  const data = await sharp(input, { density: 144, limitInputPixels: limits.maxImagePixels }).flatten({ background: '#ffffff' }).png().toBuffer();
-  if (data.byteLength > limits.maxImageBytes) throw new ExportError('Mermaid PNG exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
-  const displayWidth = Math.min(width / 2, 560, MAX_IMAGE_HEIGHT * width / height);
-  const dom = new JSDOM(svg, { contentType: 'image/svg+xml' });
-  let minFontSize: number;
-  try {
-    const sizes = Array.from(dom.window.document.querySelectorAll('text[font-size]')).map(el => Number(el.getAttribute('font-size'))).filter(size => size > 0);
-    minFontSize = sizes.length ? Math.min(...sizes) : 0;
-  } finally { dom.window.close(); }
-  return { data, type: 'png', width, height, displayWidth, minTextPt: minFontSize * (displayWidth / (width / 2)) * 0.75 };
+  const candidate = async (text: string, compact = false) => {
+    const svg = staticDiagramSvg(renderMermaidSVG(text, {
+      font: 'sans-serif', bg: palette['--bg'], fg: palette['--fg'], line: palette['--line'],
+      accent: palette['--accent'], muted: palette['--muted'], surface: palette['--surface'], border: palette['--border'],
+      padding: compact ? 8 : 24, ...(compact ? { nodeSpacing: 12, layerSpacing: 16 } : {}), interactive: false,
+    }));
+    if (!/<text\b/.test(svg)) throw new Error('Empty diagram');
+    if (Buffer.byteLength(svg) > limits.maxImageBytes) throw new ExportError('Mermaid SVG exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
+    const input = Buffer.from(svg);
+    // 2x pixels keep labels crisp at their intended Word display size.
+    const meta = await sharp(input, { density: 144, limitInputPixels: false }).metadata();
+    const width = meta.width ?? 0, height = meta.height ?? 0;
+    if (!(width > 0 && height > 0) || width > limits.maxImageDimension || height > limits.maxImageDimension || width * height > limits.maxImagePixels) throw new ExportError('Mermaid dimensions exceed the configured limit.', 'LIMIT_EXCEEDED');
+    const displayWidth = Math.min(width / 2, 560, bounds.maxWidth, Math.min(MAX_IMAGE_HEIGHT, bounds.maxHeight) * width / height);
+    const dom = new JSDOM(svg, { contentType: 'image/svg+xml' });
+    let minFontSize: number;
+    try {
+      const sizes = Array.from(dom.window.document.querySelectorAll('text[font-size]')).map(el => Number(el.getAttribute('font-size'))).filter(size => size > 0);
+      minFontSize = sizes.length ? Math.min(...sizes) : 0;
+    } finally { dom.window.close(); }
+    return { input, width, height, displayWidth, minTextPt: minFontSize * (displayWidth / (width / 2)) * 0.75 };
+  };
+  let selected = await candidate(normalized);
+  const rasterize = async (image: typeof selected): Promise<Buffer> => {
+    const data = await sharp(image.input, { density: 144, limitInputPixels: limits.maxImagePixels }).flatten({ background: '#ffffff' }).png().toBuffer();
+    if (data.byteLength > limits.maxImageBytes) throw new ExportError('Mermaid PNG exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
+    return data;
+  };
+  let data: Buffer | undefined;
+  let layoutAdjusted = false;
+  // LR/RL topology is unchanged by a TB layout. Reflow only when it clears
+  // the readability threshold; otherwise retain the author's direction.
+  if (selected.minTextPt > 0 && selected.minTextPt < 8 && /^(?:flowchart|graph)\s+(?:LR|RL)\b/i.test(normalized)) {
+    try {
+      const vertical = await candidate(normalized.replace(/^((?:flowchart|graph)\s+)(?:LR|RL)\b/i, '$1TB'), true);
+      if (vertical.minTextPt >= 8) {
+        data = await rasterize(vertical);
+        selected = vertical;
+        layoutAdjusted = true;
+      }
+    } catch {
+      // A fallback layout failure must not discard the already rendered source graph.
+    }
+  }
+  data ??= await rasterize(selected);
+  return { data, type: 'png', width: selected.width, height: selected.height, displayWidth: selected.displayWidth, minTextPt: selected.minTextPt, layoutAdjusted };
 }

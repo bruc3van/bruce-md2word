@@ -8,12 +8,13 @@ import type { DocumentOptions } from './document-options.js';
 import { columnWidths, estimatedLines } from './layout.js';
 import type { Diagnostics } from './diagnostics.js';
 export interface EmbeddedImage { data: Uint8Array; type: 'png' | 'jpg' | 'gif' | 'bmp'; width: number; height: number; displayWidth?: number }
+export interface ImageBounds { maxWidth: number; maxHeight: number }
 type Block = Paragraph | Table;
 // All horizontal layout is computed in twips; ImageRun uses 96-DPI pixels.
 interface Layout { left: number; right: number; quote: boolean }
 const rootLayout: Layout = { left: 0, right: 0, quote: false };
 const headingSlug = (text: string): string => text.toLowerCase().trim().replace(/[^\p{L}\p{N}\p{M}_\-\s]/gu, '').replace(/\s/g, '-');
-export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImage>, diagnostics: Diagnostics, formulas = new Map<string, ParagraphChild[]>()): { children: Block[]; sections: { landscape: boolean; children: Block[] }[]; options: DocumentOptions; numbering: INumberingOptions; footnotes: Record<string, { children: Paragraph[] }> } {
+export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImage>, diagnostics: Diagnostics, formulas = new Map<string, ParagraphChild[]>(), onImageBounds?: (id: string, bounds: ImageBounds) => void): { children: Block[]; sections: { landscape: boolean; children: Block[] }[]; options: DocumentOptions; numbering: INumberingOptions; footnotes: Record<string, { children: Paragraph[] }> } {
   const dom = new JSDOM(`<body>${html}</body>`);
   let options = documentDefaults();
   let landscape = false;
@@ -132,9 +133,10 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
         continue;
       }
       if (tag === 'IMG') {
+        const maxHeight = Math.min(MAX_IMAGE_HEIGHT, ((landscape ? PAGE_WIDTH : PAGE_HEIGHT) - mmToTwips(options.margins.top) - mmToTwips(options.margins.bottom)) / 15 - 80);
+        onImageBounds?.(el.getAttribute('src') ?? '', { maxWidth: Math.min(560, maxWidth), maxHeight });
         const image = images.get(el.getAttribute('src') ?? '');
         if (image) {
-          const maxHeight = Math.min(MAX_IMAGE_HEIGHT, ((landscape ? PAGE_WIDTH : PAGE_HEIGHT) - mmToTwips(options.margins.top) - mmToTwips(options.margins.bottom)) / 15 - 80);
           const width = Math.min(image.displayWidth ?? image.width, 560, maxWidth, maxHeight * image.width / image.height);
           runs.push(new ImageRun({ type: image.type, data: image.data, transformation: { width, height: Math.round(width * image.height / image.width) }, altText: { title: el.getAttribute('alt') ?? '', description: el.getAttribute('alt') ?? '', name: 'Image' } }));
         } else runs.push(new TextRun({ ...style, text: `[图片: ${el.getAttribute('alt') || '图片'}]`, italics: true, color: '6B7280' }));

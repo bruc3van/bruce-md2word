@@ -8,10 +8,11 @@ import type { Limits } from '../config.js';
 import { ExportError } from '../runtime/errors.js';
 import type { ParsedMarkdown } from './markdown.js';
 import { convertHTMLToDocx } from './html-to-docx.js';
-import type { EmbeddedImage } from './html-to-docx.js';
+import type { EmbeddedImage, ImageBounds } from './html-to-docx.js';
 import { createStyles, PAGE_WIDTH, PAGE_HEIGHT } from './styles.js';
 import { mmToTwips } from './document-options.js';
 import type { Diagnostic } from './diagnostics.js';
+import { Diagnostics } from './diagnostics.js';
 export interface AcquiredImage { id: string; data: Uint8Array }
 export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], warnings: Diagnostic[], limits: Limits): Promise<{ data: Uint8Array; warnings: Diagnostic[] }> {
   for (const warning of warnings) parsed.diagnostics.add(warning.code, warning.message, warning.severity, warning.line);
@@ -54,11 +55,22 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
     }
   }
   let html = parsed.html;
+  const diagramBounds = new Map<string, ImageBounds>();
+  if (parsed.diagrams.length) {
+    // Use the actual layout traversal, including sections and containers, rather
+    // than maintaining a second interpretation of Word directives here.
+    const preview = html.replace(/<pre data-mermaid="([^"]+)">[\s\S]*?<\/pre>/g, '<img src="$1" alt="Mermaid 图表"/>');
+    const placeholderFormulas = new Map<string, ParagraphChild[]>(parsed.formulas.map(formula => [formula.id, []]));
+    convertHTMLToDocx(preview, images, new Diagnostics(limits.maxDiagnostics), placeholderFormulas, (id, bounds) => {
+      diagramBounds.set(id, bounds);
+    });
+  }
   for (const diagram of parsed.diagrams) {
     try {
-      const image = await renderDiagram(diagram.source, limits);
+      const image = await renderDiagram(diagram.source, limits, diagramBounds.get(diagram.id));
       normalizedBytes += image.data.byteLength;
       if (normalizedBytes > limits.maxTotalImageBytes) throw new ExportError('Images and diagrams exceed the aggregate byte limit.', 'LIMIT_EXCEEDED');
+      if (image.layoutAdjusted) parsed.diagnostics.add('MERMAID_LAYOUT_ADJUSTED', `横向流程图在 Word 中过窄，已改为纵向布局以保留节点与连线；调整后最小字号约 ${image.minTextPt.toFixed(1)} pt。`, 'info', diagram.line);
       if (image.minTextPt > 0 && image.minTextPt < 8) parsed.diagnostics.add('MERMAID_SMALL_TEXT', `图表缩放后最小字号约 ${image.minTextPt.toFixed(1)} pt，低于建议的 8 pt；请拆分图表、简化标签或调整布局。`, 'info', diagram.line);
       images.set(diagram.id, image);
       html = html.replace(new RegExp(`<pre data-mermaid="${diagram.id}">[\\s\\S]*?</pre>`), `<img src="${diagram.id}" alt="Mermaid 图表"/>`);

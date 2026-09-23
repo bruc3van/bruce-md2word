@@ -23,7 +23,7 @@ test('Chinese fixtures for all six diagram types embed seven valid PNGs in DOCX'
   assert.equal(parsed.diagrams.length, 7);
   assert.equal(parsed.images.length, 0); // Generated graphics never use the file reader.
   const result = await convert(parsed, [], [], defaults);
-  assert.ok(result.warnings.every(w => w.code === 'MERMAID_SMALL_TEXT' && w.severity === 'info'));
+  assert.ok(result.warnings.every(w => ['MERMAID_SMALL_TEXT', 'MERMAID_LAYOUT_ADJUSTED'].includes(w.code) && w.severity === 'info'));
   await validateArtifact(result.data, defaults.maxOutputBytes);
   const zip = await JSZip.loadAsync(result.data);
   const media = Object.values(zip.files).filter(f => !f.dir && f.name.startsWith('word/media/'));
@@ -61,6 +61,72 @@ test('SVG raster adapter preserves Chinese labels and resolves offline colors/fo
   assert.match(svg, /Microsoft YaHei/);
   assert.doesNotMatch(svg, /@import|fonts\.googleapis|var\(|color-mix\(/);
   assert.throws(() => staticDiagramSvg('<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.com/x"/></svg>'));
+});
+
+test('wide LR flowchart reflows to readable TB without dropping its branches', async () => {
+  const source = `flowchart LR
+    A[Agent 起草 Markdown] --> B[工程师复核]
+    B --> C{严格转换通过?}
+    C -- 是 --> D[生成 Word]
+    C -- 否 --> E[修正源稿]
+    E --> B
+    D --> F[打开并检查版面]`;
+  const image = await renderDiagram(source, defaults);
+  assert.equal(image.layoutAdjusted, true);
+  assert.ok(image.minTextPt >= 8);
+  assert.ok(image.height > image.width);
+  const parsed = parseMarkdown(fence(source), defaults);
+  const result = await convert(parsed, [], [], defaults);
+  assert.deepEqual(result.warnings.map(w => w.code), ['MERMAID_LAYOUT_ADJUSTED']);
+  const zip = await JSZip.loadAsync(result.data);
+  const xml = await zip.file('word/document.xml').async('string');
+  assert.match(xml, /<w:drawing>/);
+  assert.doesNotMatch(xml, /严格转换通过|修正源稿/); // Rendered into the image.
+  const simple = await renderDiagram('graph LR\nA[开始] --> B[结束]', defaults);
+  assert.equal(simple.layoutAdjusted, false);
+});
+
+test('reflow and readability diagnostics use final section dimensions and margins', async () => {
+  const chain = count => 'graph LR\n' + Array.from({ length: count }, (_, i) => `N${i}[处理步骤${i}]`).join('-->');
+  for (const [prefix, count, adjusted] of [
+    ['', 13, true],
+    ['<!-- word:section landscape -->\n\n', 13, false],
+    ['<!-- word:document {"margins":{"top":50,"bottom":50}} -->\n\n', 16, false],
+  ]) {
+    const result = await convert(parseMarkdown(prefix + fence(chain(count)), defaults), [], [], defaults);
+    assert.deepEqual(result.warnings.map(w => w.code), [adjusted ? 'MERMAID_LAYOUT_ADJUSTED' : 'MERMAID_SMALL_TEXT']);
+    const zip = await JSZip.loadAsync(result.data);
+    const xml = await zip.file('word/document.xml').async('string');
+    const extent = xml.match(/<wp:extent cx="(\d+)" cy="(\d+)"/);
+    const media = Object.values(zip.files).find(f => !f.dir && f.name.startsWith('word/media/'));
+    const meta = await sharp(await media.async('nodebuffer')).metadata();
+    // These nodes use 13 px text in the source SVG; PNG is rendered at 2x.
+    const actualPt = 13 * 0.75 * (Number(extent[1]) / 9525) / (meta.width / 2);
+    assert.equal(actualPt >= 8, adjusted);
+    const reportedPt = Number(result.warnings[0].message.match(/约 ([\d.]+) pt/)[1]);
+    assert.ok(Math.abs(reportedPt - actualPt) < 0.06, `${reportedPt} vs ${actualPt}`);
+  }
+  const result = await convert(parseMarkdown('<!-- word:section landscape -->\n\n' + fence(chain(13)) +
+    '\n\n<!-- word:section portrait -->\n\n' + fence(chain(13)), defaults), [], [], defaults);
+  assert.deepEqual(result.warnings.map(w => w.code), ['MERMAID_SMALL_TEXT', 'MERMAID_LAYOUT_ADJUSTED']);
+});
+
+test('an oversized vertical PNG falls back to the original graph within the byte budget', async () => {
+  // Locate a case using the installed fonts, since PNG compression varies by host.
+  let checked = false;
+  for (let count = 10; count <= 16; count++) {
+    const source = 'graph LR\n' + Array.from({ length: count }, (_, i) => `N${i}[处理步骤${i}]`).join('-->');
+    const original = await renderDiagram(source, defaults, { maxWidth: 560, maxHeight: 1 });
+    const vertical = await renderDiagram(source, defaults);
+    if (!vertical.layoutAdjusted || vertical.data.length <= original.data.length) continue;
+    const result = await renderDiagram(source, { ...defaults, maxImageBytes: original.data.length });
+    assert.equal(result.layoutAdjusted, false);
+    assert.deepEqual(result.data, original.data);
+    assert.ok(result.minTextPt < 8);
+    checked = true;
+    break;
+  }
+  assert.ok(checked, 'fixture must exercise a vertical PNG larger than its original');
 });
 
 test('unsupported types, directives, empty diagrams and ER comments retain source with line diagnostics', async () => {
@@ -144,7 +210,7 @@ test('long parsed labels wrap before layout without losing Chinese, words or exp
 });
 
 test('small-text warnings identify the fence and do not block strict delivery', async () => {
-  const diagram = 'graph LR\n' + Array.from({ length: 10 }, (_, i) => `N${i}[处理步骤${i}]`).join('-->');
+  const diagram = 'sequenceDiagram\n' + Array.from({ length: 8 }, (_, i) => `participant P${i} as 服务节点${i}`).join('\n') + '\nP0->>P7: 完成';
   const h = await harness();
   try {
     const r = await h.call({ ...source('# 宽图\n\n' + fence(diagram)), strict: true });
