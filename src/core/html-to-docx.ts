@@ -2,7 +2,9 @@
 import { JSDOM } from 'jsdom';
 import { Paragraph, TextRun, ImageRun, ExternalHyperlink, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, HeadingLevel, VerticalAlign, Bookmark, InternalHyperlink, FootnoteReferenceRun, SimpleField, TableLayoutType } from 'docx';
 import type { ParagraphChild, IRunOptions, INumberingOptions } from 'docx';
-import { CONTENT_WIDTH, MAX_IMAGE_HEIGHT, numberingLevels, charsToTwips } from './styles.js';
+import { PAGE_WIDTH, PAGE_HEIGHT, MAX_IMAGE_HEIGHT, numberingLevels, charsToTwips } from './styles.js';
+import { documentDefaults, parseDocumentOptions, mmToTwips } from './document-options.js';
+import type { DocumentOptions } from './document-options.js';
 import { columnWidths, estimatedLines } from './layout.js';
 import type { Diagnostics } from './diagnostics.js';
 export interface EmbeddedImage { data: Uint8Array; type: 'png' | 'jpg' | 'gif' | 'bmp'; width: number; height: number; displayWidth?: number }
@@ -10,10 +12,13 @@ type Block = Paragraph | Table;
 // All horizontal layout is computed in twips; ImageRun uses 96-DPI pixels.
 interface Layout { left: number; right: number; quote: boolean }
 const rootLayout: Layout = { left: 0, right: 0, quote: false };
-const availablePixels = (layout: Layout): number => Math.max(1, (CONTENT_WIDTH - layout.left - layout.right) / 15);
 const headingSlug = (text: string): string => text.toLowerCase().trim().replace(/[^\p{L}\p{N}\p{M}_\-\s]/gu, '').replace(/\s/g, '-');
-export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImage>, diagnostics: Diagnostics, formulas = new Map<string, ParagraphChild[]>()): { children: Block[]; numbering: INumberingOptions; footnotes: Record<string, { children: Paragraph[] }> } {
+export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImage>, diagnostics: Diagnostics, formulas = new Map<string, ParagraphChild[]>()): { children: Block[]; sections: { landscape: boolean; children: Block[] }[]; options: DocumentOptions; numbering: INumberingOptions; footnotes: Record<string, { children: Paragraph[] }> } {
   const dom = new JSDOM(`<body>${html}</body>`);
+  let options = documentDefaults();
+  let landscape = false;
+  const contentWidth = (): number => (landscape ? PAGE_HEIGHT : PAGE_WIDTH) - mmToTwips(options.margins.left) - mmToTwips(options.margins.right);
+  const availablePixels = (layout: Layout): number => Math.max(1, (contentWidth() - layout.left - layout.right) / 15);
   const numbering: INumberingOptions['config'][number][] = [];
   let nextList = 0;
   let sectionLevel = 0;
@@ -38,7 +43,12 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     const next = el.nextElementSibling;
     let match: RegExpExecArray | null;
     if (el.closest('[data-footnotes]')) { directiveFailure(el, 'Layout directives inside footnotes are not supported; source retained.'); continue; }
-    if ((match = /^<!-- word:table widths=([0-9., ]+) -->$/.exec(text)) && next?.tagName === 'TABLE') {
+    if ((match = /^<!-- word:document (.+) -->$/.exec(text)) && el === dom.window.document.body.firstElementChild) {
+      try { options = parseDocumentOptions(match[1]); el.setAttribute('data-document-options', 'true'); }
+      catch (error) { directiveFailure(el, (error as Error).message); }
+    } else if ((match = /^<!-- word:section (landscape|portrait) -->$/.exec(text)) && el.parentElement === dom.window.document.body) {
+      el.setAttribute('data-orientation', match[1]);
+    } else if ((match = /^<!-- word:table widths=([0-9., ]+) -->$/.exec(text)) && next?.tagName === 'TABLE') {
       const ratios = match[1].split(',').map(Number);
       const count = next.querySelector('tr')?.children.length;
       if (ratios.length !== count || ratios.some(n => !Number.isFinite(n) || n <= 0 || n > 1000)) { directiveFailure(el, 'Table widths must be positive ratios matching the column count.'); continue; }
@@ -47,16 +57,29 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       next.setAttribute('data-list-id', match[1]); next.setAttribute('data-list-action', match[2] ?? 'restart'); el.remove();
     } else if ((match = /^<!-- word:numbering (source|section=[1-6]) -->$/.exec(text)) && el.parentElement === dom.window.document.body) {
       el.setAttribute('data-numbering-section', match[1] === 'source' ? '0' : match[1].slice(-1));
-    } else if (text === '<!-- word:caption -->' && next?.tagName === 'P') {
+    } else if ((match = /^<!-- word:caption(?: kind=(figure|table) id=([A-Za-z][\w-]{0,63}))? -->$/.exec(text)) && next?.tagName === 'P') {
+      if (match[1]) { next.setAttribute('data-caption-kind', match[1]); next.setAttribute('data-caption-id', match[2]); }
       next.setAttribute('data-caption', 'true'); el.remove();
     } else directiveFailure(el, 'Unknown or misplaced Word layout directive; source retained.');
   }
   const isFigure = (el: Element | null): boolean => !!el && (el.tagName === 'IMG' || el.tagName === 'TABLE' || el.tagName === 'P' && el.children.length === 1 && el.firstElementChild?.tagName === 'IMG');
+  const captions = new Map<string, { bookmark: string; label: string; number: number; sequence: string }>();
+  const captionCounts = { figure: 0, table: 0 };
   for (const caption of Array.from(dom.window.document.querySelectorAll('[data-caption]'))) {
     if (isFigure(caption.previousElementSibling)) caption.previousElementSibling!.setAttribute('data-keep-next', 'true');
     else if (isFigure(caption.nextElementSibling)) caption.setAttribute('data-keep-next', 'true');
     else diagnostics.add('LAYOUT_DIRECTIVE_INVALID', 'Caption has no adjacent image or table.');
+    const kind = caption.getAttribute('data-caption-kind') as 'figure' | 'table' | null;
+    const id = caption.getAttribute('data-caption-id');
+    if (kind && id) {
+      const target = isFigure(caption.previousElementSibling) ? caption.previousElementSibling : isFigure(caption.nextElementSibling) ? caption.nextElementSibling : null;
+      if (!target || (target.tagName === 'TABLE') !== (kind === 'table') || captions.has(id)) {
+        diagnostics.add('LAYOUT_DIRECTIVE_INVALID', 'Numbered caption needs a matching adjacent figure/table and unique id; caption text retained.');
+        caption.removeAttribute('data-caption-id');
+      } else captions.set(id, { bookmark: `caption_${captions.size + 1}`, label: kind === 'figure' ? '图' : '表', number: ++captionCounts[kind], sequence: kind === 'figure' ? 'Figure' : 'Table' });
+    }
   }
+  if (options.headingNumbering) numbering.push({ reference: 'document-headings', levels: Array.from({ length: 6 }, (_, level) => ({ level, format: 'decimal', text: Array.from({ length: level + 1 }, (_, i) => `%${i + 1}`).join('.'), start: 1, style: { paragraph: { indent: { left: 0, hanging: 0 } } } })) });
   const anchors = new Map<string, string>();
   const bookmarks = new Map<Element, string>();
   for (const heading of Array.from(dom.window.document.querySelectorAll('h1,h2,h3,h4,h5,h6'))) {
@@ -71,7 +94,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     const pieces = text.split(/(\p{Emoji_Presentation}|\p{Extended_Pictographic}(?:\u{FE0F}|\u{200D}\p{Extended_Pictographic})*)/gu);
     return pieces.filter(Boolean).map(text => new TextRun({ ...(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/u.test(text) ? { font: 'Segoe UI Emoji' } : {}), ...style, text }));
   }
-  function inline(nodes: Iterable<Node>, style: IRunOptions = {}, maxWidth = CONTENT_WIDTH / 15): ParagraphChild[] {
+  function inline(nodes: Iterable<Node>, style: IRunOptions = {}, maxWidth = contentWidth() / 15): ParagraphChild[] {
     const runs: ParagraphChild[] = [];
     for (const node of nodes) {
       if (node.nodeType === 3) {
@@ -111,7 +134,8 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       if (tag === 'IMG') {
         const image = images.get(el.getAttribute('src') ?? '');
         if (image) {
-          const width = Math.min(image.displayWidth ?? image.width, 560, maxWidth, MAX_IMAGE_HEIGHT * image.width / image.height);
+          const maxHeight = Math.min(MAX_IMAGE_HEIGHT, ((landscape ? PAGE_WIDTH : PAGE_HEIGHT) - mmToTwips(options.margins.top) - mmToTwips(options.margins.bottom)) / 15 - 80);
+          const width = Math.min(image.displayWidth ?? image.width, 560, maxWidth, maxHeight * image.width / image.height);
           runs.push(new ImageRun({ type: image.type, data: image.data, transformation: { width, height: Math.round(width * image.height / image.width) }, altText: { title: el.getAttribute('alt') ?? '', description: el.getAttribute('alt') ?? '', name: 'Image' } }));
         } else runs.push(new TextRun({ ...style, text: `[图片: ${el.getAttribute('alt') || '图片'}]`, italics: true, color: '6B7280' }));
       } else if (tag === 'BR') runs.push(new TextRun({ text: '', break: 1 }));
@@ -119,7 +143,14 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       else if (tag === 'A') {
         const href = el.getAttribute('href') ?? '';
         const children = inline(el.childNodes, { ...style, color: '2563EB', underline: {} }, maxWidth);
-        if (href.startsWith('#')) {
+        if (href.startsWith('#ref:')) {
+          const target = captions.get(href.slice(5));
+          if (target) {
+            const field = new SimpleField(`REF ${target.bookmark} \\h`);
+            field.addChildElement(new TextRun({ ...style, text: `${target.label} ${target.number}` }));
+            runs.push(field);
+          } else { runs.push(...children); diagnostics.add('LINK_UNAVAILABLE', 'Cross-reference has no matching numbered caption; link text retained.'); }
+        } else if (href.startsWith('#')) {
           let target: string | undefined;
           try { target = anchors.get(decodeURIComponent(href.slice(1))); } catch { /* Invalid fragment. */ }
           if (target) runs.push(new InternalHyperlink({ anchor: target, children }));
@@ -138,7 +169,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     if (level > 4) diagnostics.add('LIST_DEPTH_REDUCED', 'List nesting deeper than five levels was flattened.');
     const ordered = el.tagName === 'OL';
     let reference = `list-${nextList++}`;
-    const textLeft = Math.min(layout.left + (level > 4 ? 0 : 720), CONTENT_WIDTH - layout.right - 720);
+    const textLeft = Math.min(layout.left + (level > 4 ? 0 : 720), contentWidth() - layout.right - 720);
     const hanging = ordered ? 480 : 360;
     const itemLayout = { ...layout, left: textLeft };
     const start = Number(el.getAttribute('start') ?? 1);
@@ -191,12 +222,13 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     if (node.nodeType !== 1) return [];
     const el = node as Element;
     const tag = el.tagName;
+    if (el.hasAttribute('data-document-options') || el.hasAttribute('data-orientation')) return [];
     if (el.hasAttribute('data-footnotes')) return [];
     if (el.hasAttribute('data-numbering-section')) { sectionLevel = Number(el.getAttribute('data-numbering-section')); section++; autoList = undefined; return []; }
     if (/^H[1-6]$/.test(tag) && el.parentElement === dom.window.document.body && sectionLevel && Number(tag[1]) <= sectionLevel) { section++; autoList = undefined; }
     const width = availablePixels(layout);
     const indent = { left: layout.left, right: layout.right, firstLine: 0 };
-    if (/^H[1-6]$/.test(tag)) return [new Paragraph({ children: [new Bookmark({ id: bookmarks.get(el)!, children: inline(el.childNodes, {}, width) })], indent, keepNext: true, keepLines: true, heading: HeadingLevel[`HEADING_${tag[1]}` as keyof typeof HeadingLevel] })];
+    if (/^H[1-6]$/.test(tag)) return [new Paragraph({ children: [new Bookmark({ id: bookmarks.get(el)!, children: inline(el.childNodes, {}, width) })], ...(options.headingNumbering && el.parentElement === dom.window.document.body ? { numbering: { reference: 'document-headings', level: Number(tag[1]) - 1 } } : {}), indent, keepNext: true, keepLines: true, heading: HeadingLevel[`HEADING_${tag[1]}` as keyof typeof HeadingLevel] })];
     if (tag === 'P' && el.hasAttribute('data-math-block')) return [new Paragraph({ children: inline(el.childNodes, {}, width), alignment: AlignmentType.CENTER, indent, spacing: { before: 160, after: 160 } })];
     if (tag === 'P' && el.hasAttribute('data-mermaid-notice')) return [new Paragraph({ children: [new TextRun({ text: el.textContent ?? '', color: '92400E', size: 20 })], indent, spacing: { before: 160, after: 80 }, keepNext: true })];
     if (tag === 'P') {
@@ -205,7 +237,15 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
         if (el.hasAttribute('data-keep-next')) (meaningful[0] as Element).setAttribute('data-keep-next', 'true');
         return block(meaningful[0], level, layout);
       }
-      if (el.hasAttribute('data-caption')) return [new Paragraph({ style: 'Caption', children: inline(el.childNodes, {}, width), indent, keepNext: el.hasAttribute('data-keep-next'), keepLines: true })];
+      if (el.hasAttribute('data-caption')) {
+        const target = captions.get(el.getAttribute('data-caption-id') ?? '');
+        const prefix: ParagraphChild[] = [];
+        if (target) {
+          const field = new SimpleField(`SEQ ${target.sequence} \\* ARABIC`, String(target.number));
+          prefix.push(new Bookmark({ id: target.bookmark, children: [new TextRun(`${target.label} `), field] }), new TextRun('：'));
+        }
+        return [new Paragraph({ style: 'Caption', children: [...prefix, ...inline(el.childNodes, {}, width)], indent, keepNext: el.hasAttribute('data-keep-next'), keepLines: true })];
+      }
       return [new Paragraph({ children: inline(el.childNodes, {}, width), widowControl: true, style: layout.quote ? 'Quote' : 'BodyText',
         ...(layout.quote || layout.left || layout.right ? { indent } : {}),
         ...(layout.quote && quoteAfter !== undefined ? { spacing: { after: quoteAfter } } : {}),
@@ -220,7 +260,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     if (tag === 'TABLE') {
       const trs = Array.from(el.querySelectorAll('tr'));
       const count = Math.max(1, ...trs.map(tr => tr.children.length));
-      const tableWidth = Math.max(1, CONTENT_WIDTH - layout.left - layout.right);
+      const tableWidth = Math.max(1, contentWidth() - layout.left - layout.right);
       const ratios = el.hasAttribute('data-widths') ? JSON.parse(el.getAttribute('data-widths')!) as number[] : undefined;
       let widths = columnWidths(trs, count, tableWidth, ratios);
       if (ratios && widths.some(width => width < 480)) {
@@ -231,7 +271,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       const inner = { style: BorderStyle.SINGLE, size: 4, color: 'D1D5DB' };
       return [new Table({ layout: TableLayoutType.FIXED, indent: { size: layout.left, type: WidthType.DXA }, width: { size: tableWidth, type: WidthType.DXA }, columnWidths: widths, borders: { top: outer, bottom: outer, left: outer, right: outer, insideHorizontal: inner, insideVertical: inner }, rows: trs.map(tr => {
         const header = tr.parentElement?.tagName === 'THEAD';
-        return new TableRow({ cantSplit: Array.from(tr.children).every((cell, i) => !cell.querySelector('img,[data-math]') && estimatedLines(cell.textContent ?? '', widths[i] - 300) <= 8), tableHeader: header || undefined, children: Array.from(tr.children).map((cell, i) => new TableCell({ width: { size: widths[i], type: WidthType.DXA }, ...(header ? { shading: { fill: 'E5E7EB' } } : {}), verticalAlign: VerticalAlign.CENTER, margins: { top: header ? 120 : 100, bottom: header ? 120 : 100, left: 150, right: 150 }, children: [new Paragraph({ keepNext: el.hasAttribute('data-keep-next') && tr === trs[trs.length - 1], indent: { firstLine: 0 }, alignment: ({ left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT } as Record<string, typeof AlignmentType.LEFT | typeof AlignmentType.CENTER | typeof AlignmentType.RIGHT>)[(cell as HTMLElement).style.textAlign] ?? (header || cell.tagName === 'TH' ? AlignmentType.CENTER : AlignmentType.LEFT), children: inline(cell.childNodes, header ? { bold: true, size: 24 } : {}, Math.max(1, (widths[i] - 300) / 15)) })] })) });
+        return new TableRow({ cantSplit: Array.from(tr.children).every((cell, i) => !cell.querySelector('img,[data-math]') && estimatedLines(cell.textContent ?? '', (widths[i] - 300) * 12 / options.fontSize) <= 8), tableHeader: header || undefined, children: Array.from(tr.children).map((cell, i) => new TableCell({ width: { size: widths[i], type: WidthType.DXA }, ...(header ? { shading: { fill: 'E5E7EB' } } : {}), verticalAlign: VerticalAlign.CENTER, margins: { top: header ? 120 : 100, bottom: header ? 120 : 100, left: 150, right: 150 }, children: [new Paragraph({ keepNext: el.hasAttribute('data-keep-next') && tr === trs[trs.length - 1], indent: { firstLine: 0 }, alignment: ({ left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT } as Record<string, typeof AlignmentType.LEFT | typeof AlignmentType.CENTER | typeof AlignmentType.RIGHT>)[(cell as HTMLElement).style.textAlign] ?? (header || cell.tagName === 'TH' ? AlignmentType.CENTER : AlignmentType.LEFT), children: inline(cell.childNodes, header ? { bold: true, size: options.fontSize * 2 } : {}, Math.max(1, (widths[i] - 300) / 15)) })] })) });
       }) })];
     }
     if (tag === 'IMG') return [new Paragraph({ keepNext: el.hasAttribute('data-keep-next'), children: inline([el], {}, width), alignment: images.has(el.getAttribute('src') ?? '') ? AlignmentType.CENTER : undefined, indent, spacing: { before: 200, after: 200 } })];
@@ -242,12 +282,26 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     return Array.from(el.childNodes).flatMap(child => block(child, level, layout));
   }
   try {
-    const children: Block[] = [];
-    for (const item of Array.from(dom.window.document.body.childNodes).flatMap(node => block(node))) {
-      // Word can merge adjacent tables even when separate table XML is emitted.
-      if (item instanceof Table && children.at(-1) instanceof Table) children.push(new Paragraph({ spacing: { before: 0, after: 80, line: 20 }, children: [new TextRun({ text: '', size: 2 })] }));
-      children.push(item);
+    const sections: { landscape: boolean; children: Block[] }[] = [{ landscape: false, children: [] }];
+    let children = sections[0].children;
+    for (const node of Array.from(dom.window.document.body.childNodes)) {
+      if (node.nodeType === 1 && (node as Element).hasAttribute('data-orientation')) {
+        const next = (node as Element).getAttribute('data-orientation') === 'landscape';
+        if (next !== landscape) {
+          landscape = next;
+          if (children.length) { children = []; sections.push({ landscape, children }); }
+          else sections.at(-1)!.landscape = landscape;
+        }
+        continue;
+      }
+      for (const item of block(node)) {
+        // Word can merge adjacent tables even when separate table XML is emitted.
+        if (item instanceof Table && children.at(-1) instanceof Table) children.push(new Paragraph({ spacing: { before: 0, after: 80, line: 20 }, children: [new TextRun({ text: '', size: 2 })] }));
+        children.push(item);
+      }
     }
+    // Footnotes may occur in any section; use the narrower page for image bounds.
+    landscape = false;
     for (const [id, note] of noteElements) {
       const paragraphs: Paragraph[] = [];
       const noteBlocks = (el: Element): void => {
@@ -272,6 +326,8 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
         children.push(...paragraphs);
       }
     }
-    return { children: children.length ? children : [new Paragraph('')], numbering: { config: numbering }, footnotes };
+    if (!children.length && sections.length > 1) sections.pop();
+    if (!sections[0].children.length) sections[0].children.push(new Paragraph(''));
+    return { children: sections.flatMap(section => section.children), sections, options, numbering: { config: numbering }, footnotes };
   } finally { dom.window.close(); }
 }

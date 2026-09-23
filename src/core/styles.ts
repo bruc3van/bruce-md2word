@@ -1,6 +1,7 @@
 // Styles retained from bruce-doc-converter, revision recorded in NOTICE.
 import { AlignmentType, BorderStyle, TabStopType, LevelFormat } from 'docx';
 import type { IStylesOptions, INumberingOptions } from 'docx';
+import type { DocumentOptions } from './document-options.js';
 export const PAGE_WIDTH = 11906;
 export const PAGE_HEIGHT = 16838;
 export const MARGIN = 1417;
@@ -16,8 +17,8 @@ export function charsToTwips(chars: number, fontSize = 12) {
 /**
  * 创建文档样式配置
  */
-export function createStyles(): IStylesOptions {
-  return {
+export function createStyles(options?: DocumentOptions): IStylesOptions {
+  const styles: IStylesOptions = {
     default: {
       document: {
         run: {
@@ -285,6 +286,19 @@ export function createStyles(): IStylesOptions {
         }
       }
     ]
+  };
+  if (!options) return styles;
+  return {
+    ...styles,
+    default: { ...styles.default, document: {
+      run: { font: options.font, size: options.fontSize * 2 },
+      paragraph: { spacing: { line: Math.round(options.lineSpacing * 240) }, indent: { firstLine: 0 } },
+    } },
+    paragraphStyles: styles.paragraphStyles?.map(style => {
+      if (style.id === 'BodyText') return { ...style, paragraph: { ...style.paragraph, indent: { firstLine: charsToTwips(options.firstLineIndent, options.fontSize) } } };
+      if (/^Heading[1-6]$/.test(style.id)) return { ...style, run: { ...style.run, font: options.headingFont }, paragraph: { ...style.paragraph, outlineLevel: Number(style.id.slice(-1)) - 1, ...(options.preset === 'technical' ? { alignment: AlignmentType.LEFT } : {}) } };
+      return style;
+    }),
   };
 }
 

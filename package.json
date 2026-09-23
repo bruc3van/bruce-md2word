@@ -1,6 +1,6 @@
 {
   "name": "bruce-md2word",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "面向 AI Agent 的 Markdown 转 Word 工具，提供开箱即用的中文排版、Mermaid 图表转图片和可编辑数学公式，提供Skill、独立 CLI 和 DSH 插件。",
   "type": "module",
   "main": "lib/index.js",
@@ -16,6 +16,7 @@
   "files": [
     "lib",
     "skills",
+    "docs/document-layout.md",
     "!lib/**/*.map",
     "cordis.patch.yml",
     "LICENSE",

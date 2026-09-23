@@ -1,5 +1,5 @@
-import { Document, Packer, TextRun } from 'docx';
-import type { ParagraphChild } from 'docx';
+import { Document, Packer, TextRun, Paragraph, Header, Footer, PageNumber, TableOfContents, AlignmentType, SectionType, PageOrientation } from 'docx';
+import type { ParagraphChild, ISectionOptions, FileChild } from 'docx';
 import { latexToWordMath } from './math.js';
 import { renderDiagram } from './mermaid.js';
 import sharp from 'sharp';
@@ -9,7 +9,8 @@ import { ExportError } from '../runtime/errors.js';
 import type { ParsedMarkdown } from './markdown.js';
 import { convertHTMLToDocx } from './html-to-docx.js';
 import type { EmbeddedImage } from './html-to-docx.js';
-import { createStyles, PAGE_WIDTH, PAGE_HEIGHT, MARGIN } from './styles.js';
+import { createStyles, PAGE_WIDTH, PAGE_HEIGHT } from './styles.js';
+import { mmToTwips } from './document-options.js';
 import type { Diagnostic } from './diagnostics.js';
 export interface AcquiredImage { id: string; data: Uint8Array }
 export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], warnings: Diagnostic[], limits: Limits): Promise<{ data: Uint8Array; warnings: Diagnostic[] }> {
@@ -77,8 +78,35 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
       formulas.set(formula.id, [new TextRun({ text: '[公式未转换] ', color: '92400E' }), ...formula.raw.split('\n').map((text, i) => new TextRun({ text, ...(i ? { break: 1 } : {}), font: 'Consolas' }))]);
     }
   }
-  const { children, numbering, footnotes } = convertHTMLToDocx(html, images, parsed.diagnostics, formulas);
-  const document = new Document({ styles: createStyles(), numbering, footnotes, features: { updateFields: true }, sections: [{ properties: { page: { size: { width: PAGE_WIDTH, height: PAGE_HEIGHT }, margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } }, children }] });
+  const { sections: bodySections, options, numbering, footnotes } = convertHTMLToDocx(html, images, parsed.diagnostics, formulas);
+  const separateFront = bodySections[0].landscape && !!(options.title || options.toc);
+  const front: FileChild[] = [];
+  if (options.title) front.push(new Paragraph({ children: [new TextRun({ text: options.title, bold: true, size: 44, font: options.headingFont })], alignment: AlignmentType.CENTER, spacing: { after: 360 }, keepNext: true }));
+  if (options.toc) {
+    front.push(new Paragraph({ text: '目录', alignment: AlignmentType.CENTER, keepNext: true }), new TableOfContents('目录', { hyperlink: true, headingStyleRange: `1-${options.tocDepth}`, beginDirty: true }));
+    // A separate front section already ends with a next-page section break.
+    if (!separateFront) front.push(new Paragraph({ pageBreakBefore: true }));
+  }
+  const contentSections = separateFront
+    ? [{ landscape: false, children: front }, ...bodySections]
+    : bodySections.map((section, i) => ({ ...section, children: [...(i === 0 ? front : []), ...section.children] }));
+  const runningText = { size: 20, font: options.font };
+  const sections: ISectionOptions[] = contentSections.map(section => ({
+    properties: { type: SectionType.NEXT_PAGE, page: {
+      size: { width: PAGE_WIDTH, height: PAGE_HEIGHT, orientation: section.landscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT },
+      margin: { ...Object.fromEntries(Object.entries(options.margins).map(([key, value]) => [key, mmToTwips(value)])),
+        ...(options.header ? { header: Math.min(708, mmToTwips(options.margins.top / 2)) } : {}),
+        ...(options.footer || options.pageNumbers ? { footer: Math.min(708, mmToTwips(options.margins.bottom / 2)) } : {}),
+      },
+    } },
+    ...(options.header ? { headers: { default: new Header({ children: [new Paragraph({ children: [new TextRun({ ...runningText, text: options.header })], spacing: { line: 240, before: 0, after: 0 }, alignment: AlignmentType.CENTER })] }) } } : {}),
+    ...(options.footer || options.pageNumbers ? { footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 240, before: 0, after: 0 }, children: [
+      ...(options.footer ? [new TextRun({ ...runningText, text: options.footer })] : []),
+      ...(options.pageNumbers ? [new TextRun({ ...runningText, children: [options.footer ? '  ' : '', '第 ', PageNumber.CURRENT, ' 页 / 共 ', PageNumber.TOTAL_PAGES, ' 页'] })] : []),
+    ] })] }) } } : {}),
+    children: section.children,
+  }));
+  const document = new Document({ title: options.title || undefined, styles: createStyles(options), numbering, footnotes, features: { updateFields: true }, sections });
   const data = await Packer.toBuffer(document);
   if (data.byteLength > limits.maxOutputBytes) throw new ExportError('DOCX exceeds the configured output limit.', 'LIMIT_EXCEEDED');
   return { data, warnings: parsed.diagnostics.items };

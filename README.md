@@ -12,7 +12,7 @@
 - **Mermaid 图表转图片**：将流程图、时序图、状态图、类图、ER 图和 XY 图的常用语法在本机渲染为 PNG，按比例嵌入 Word，支持中文标签，无需手工截图。
 - **可编辑的数学公式**：将 LaTeX 行内及块公式转换为 Word 原生公式，支持分式、根式、上下标、向量、求和积分、矩阵和分段函数，方便在 Word 中继续修改。
 
-适合项目报告、实施方案、会议纪要、技术说明等以结构化内容为主的文档。当前提供固定排版样式，不提供自定义 Word 模板接口。
+适合项目报告、实施方案、会议纪要、技术说明等以结构化内容为主的文档。提供中文报告和技术文档预设，可统一配置字体、字号、边距、缩进、目录、页码与页眉页脚，支持标题/图表编号、交叉引用和显式横向分节；不提供自定义 Word 模板接口。配置入口见 [文档排版说明](docs/document-layout.md)。
 
 ## 导出效果
 
@@ -112,7 +112,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.3.2
+npm install -g bruce-md2word@0.4.0
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -125,12 +125,12 @@ npm install -g bruce-md2word@0.3.2
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.3.2 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.4.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.3.2
+npm install -g bruce-md2word@0.4.0
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -153,13 +153,13 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 当前包要求 Node.js `>=24 <25`、DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`、Cordis `4.0.2`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.3.2
+dsh plugin --profile web add bruce-md2word@0.4.0
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.3.2
+npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.4.0
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
