@@ -1,3 +1,11 @@
+# v0.5.0
+
+- Mermaid 流程图支持 `style` / `classDef`（含 `classDef default`）中的节点 `font-size`，字号同时参与布局和绘制；节点与 `linkStyle` 支持 `stroke-dasharray`，逗号可用 `\,` 转义。
+- 支持 `%%{init}%%` / `initialize` 的 JSON5 配置及 YAML 前置 `config` 的受限子集：内置主题、常用主题颜色变量、流程图 `nodeSpacing` / `rankSpacing`。超出子集的配置仍保留源码并报告 `MERMAID_NOT_RENDERED`。
+- 新增 `MERMAID_STYLE_UNSUPPORTED` 信息提示：未知主题变量、样式属性或无法解析的字号/虚线值会被忽略并回退默认样式，不阻止 strict 导出。
+- 修复流程图解析：节点 ID 中的 `--`（如 `foo--bar`）、无空格连线（`A-->B`、`A-.->B`）和 `:::class` 简写后的连线不再截断或丢失；无法解析的流程图语句改为保留源码并报告诊断，不再静默生成缺少节点或连线的图片。
+- 新增 `yaml`、`json5` 运行时依赖，补充样式增强样例与回归测试。
+
 # v0.4.1
 
 - 横向 Mermaid 流程图在 Word 缩放后文字不足 8 pt、且紧凑纵向布局可达到 8 pt 时，自动改为纵向排布并返回 `MERMAID_LAYOUT_ADJUSTED`，保留节点、连线和分支标签。仍过小的图继续返回 `MERMAID_SMALL_TEXT`。

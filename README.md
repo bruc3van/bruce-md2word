@@ -76,6 +76,7 @@ Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，优先复�
 | `docx` | `9.7.1` | 生成 Word 文档、样式、表格和原生数学公式。 |
 | `temml` | `0.13.5` | 将 LaTeX 解析为 MathML，再由本项目转换为 Word 原生公式。 |
 | `jsdom` | `27.4.0` | 在本地解析 HTML、XML、MathML 和生成的 SVG；不启动浏览器。 |
+| `yaml` / `json5` | `2.9.1` / `2.2.3` | 解析 Mermaid 前置配置和初始化配置。 |
 | `sharp` | `0.35.4` | 解码和处理图片，将生成的图表栅格化为 PNG；包含平台相关原生依赖。 |
 | `bmp-js` | `0.1.0` | 解码支持的 BMP 图片。 |
 | `jszip` | `3.10.2` | 检查 DOCX 压缩包结构及内部资源。 |
@@ -124,7 +125,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.4.1
+npm install -g bruce-md2word@0.5.0
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -137,12 +138,12 @@ npm install -g bruce-md2word@0.4.1
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.4.1 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.5.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.4.1
+npm install -g bruce-md2word@0.5.0
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -165,13 +166,13 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 当前包要求 Node.js `>=24 <25`、DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`、Cordis `4.0.2`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.4.1
+dsh plugin --profile web add bruce-md2word@0.5.0
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.4.1
+npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.5.0
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
@@ -230,7 +231,7 @@ DSH 的 `word_export` 一次调用接收一个 Markdown 文件或一段正文，
 
 图片相对源 Markdown 所在目录解析；直接传正文时，CLI 使用 `--asset-base-dir`，DSH 使用 `assetBaseDir` 指定相对图片目录。网络图片不会自动下载，SVG 输入不受支持。
 
-Mermaid 使用本地轻量渲染器，不覆盖官方全部语法。饼图、甘特图以及部分配置和指令会触发未渲染警告。中文图表需要生成机器安装中文字体；宽图仍可能缩小到不易阅读，建议拆分。具体范围见 [图表参考](docs/agent-reference.md#mermaid-图表)。
+Mermaid 使用本地轻量渲染器，不覆盖官方全部语法。支持流程图节点字号、节点/连线虚线和常用 init/YAML 主题配置；饼图、甘特图以及超出支持范围的配置和指令仍会触发未渲染警告。中文图表需要生成机器安装中文字体；宽图仍可能缩小到不易阅读，建议拆分。具体范围见 [图表参考](docs/agent-reference.md#mermaid-图表)。
 
 数学公式使用 Temml 在本地解析，通过自有转换层生成 Word 原生公式，无需浏览器、字体图片或外部转换服务。支持 `$...$`、`\(...\)` 行内公式，以及独立块中的 `$$...$$`、`\[...\]`。不支持的结构或错误语法保留完整源码并报告 `MATH_NOT_CONVERTED`，严格模式拒绝保存。自定义宏、公式编号与引用等暂不支持，具体边界见 [公式参考](docs/agent-reference.md#数学公式)。
 

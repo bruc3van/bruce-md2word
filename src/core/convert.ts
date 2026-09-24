@@ -70,6 +70,7 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
       const image = await renderDiagram(diagram.source, limits, diagramBounds.get(diagram.id));
       normalizedBytes += image.data.byteLength;
       if (normalizedBytes > limits.maxTotalImageBytes) throw new ExportError('Images and diagrams exceed the aggregate byte limit.', 'LIMIT_EXCEEDED');
+      for (const note of image.styleNotes ?? []) parsed.diagnostics.add('MERMAID_STYLE_UNSUPPORTED', note, 'info', diagram.line);
       if (image.layoutAdjusted) parsed.diagnostics.add('MERMAID_LAYOUT_ADJUSTED', `横向流程图在 Word 中过窄，已改为纵向布局以保留节点与连线；调整后最小字号约 ${image.minTextPt.toFixed(1)} pt。`, 'info', diagram.line);
       if (image.minTextPt > 0 && image.minTextPt < 8) parsed.diagnostics.add('MERMAID_SMALL_TEXT', `图表缩放后最小字号约 ${image.minTextPt.toFixed(1)} pt，低于建议的 8 pt；请拆分图表、简化标签或调整布局。`, 'info', diagram.line);
       images.set(diagram.id, image);

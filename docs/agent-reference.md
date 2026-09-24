@@ -56,7 +56,21 @@
 
 自动将 `mermaid` 代码块渲染为 2 倍像素 PNG，按比例嵌入 Word。采用经本包适配的 `beautiful-mermaid 1.1.3` 和已有的 `sharp`，无需 Chromium、浏览器或独立 CLI；安装依赖后全离线转换，不加载在线字体。
 
-支持流程图、状态图、时序图、类图、ER 图和 XY 图的常用语法。轻量渲染器的布局、主题及语法覆盖与官方 Mermaid 不完全一致。饼图、甘特图等未支持类型，以及初始化配置、前置配置、click 指令、ER 字段注释会在文档中显示未渲染说明、保留代码并报告 `MERMAID_NOT_RENDERED`；`strict` 模式拒绝保存。不承诺识别官方语法的所有不兼容细节。
+支持流程图、状态图、时序图、类图、ER 图和 XY 图的常用语法。轻量渲染器的布局、主题及语法覆盖与官方 Mermaid 不完全一致。饼图、甘特图等未支持类型，以及超出下述子集的配置、click 指令、ER 字段注释会在文档中显示未渲染说明、保留代码并报告 `MERMAID_NOT_RENDERED`；`strict` 模式拒绝保存。不承诺识别官方语法的所有不兼容细节。
+
+### 样式增强范围
+
+保留 `beautiful-mermaid 1.1.3`，不引入浏览器。流程图 `style`、`classDef` 支持节点 `font-size`（数字或 px/pt，换算后 6–96 px），字号同时参与节点布局与文字绘制；支持 `classDef default`。节点和 `linkStyle` 支持 `stroke-dasharray`，例如 `9 3` 或 `9\,3`，以及 `none`。原有填充、文字色、边框色和线宽继续生效。
+
+支持 `%%{init: {...}}%%` / `initialize` 的 JSON5 对象，以及 YAML 前置配置中的 `config` 对象。配置只接受以下子集：
+
+- `theme`：`default`、`base`、`dark`、`forest`、`neutral`。这是本渲染器的对应配色，不承诺复刻官方主题全部细节。
+- `themeVariables`：`background`、`primaryColor`、`primaryTextColor`、`textColor`、`primaryBorderColor`、`lineColor`；值为 `#RGB` 或 `#RRGGBB`。颜色映射到渲染器的全图角色，字体仍使用本地中文字体。
+- `flowchart.nodeSpacing`、`flowchart.rankSpacing`：8–200 的有限数值，仅用于流程图；为改善小字而自动调整纵向布局时，仍优先使用紧凑间距。
+
+其他主题变量、识别到的样式声明中的未知属性，以及无法解析或超出上述范围的 `font-size` / `stroke-dasharray` 值产生 `MERMAID_STYLE_UNSUPPORTED` 信息提示；不支持的字号或虚线值使用默认样式，不因纯样式缺失阻止 strict 导出。未知顶层配置、未知布局配置、非法配置字段、YAML 别名、额外前置字段（如 title）仍走保留源码的未渲染降级路径。不存在“支持 init 就支持其中所有配置”的承诺。多个 init 按顺序覆盖前置配置，主题变量按键合并。
+
+样例见 [样式增强](../fixtures/mermaid-enhanced.md)。字体大小增强限于流程图节点；其他图类型和边标签字号尚未扩展。
 
 中文使用生成机器的本地字体，优先 PingFang SC、Microsoft YaHei、Noto Sans CJK SC 等。Linux 无中文字体时需要自行安装。图片嵌入后，接收文档的机器无需相同字体。流程图和状态图的普通节点、连线长标签会在布局前自动换行，保留英文单词和已有换行；含内联格式标签的文本保持原样。其他图类型仍可用 `<br>` 显式换行。中文类成员按宽字符估算所需类框宽度。自动调整后仍很宽的图会缩小到页面宽度，宜简化布局或拆图。
 

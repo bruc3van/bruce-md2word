@@ -130,7 +130,7 @@ test('an oversized vertical PNG falls back to the original graph within the byte
 });
 
 test('unsupported types, directives, empty diagrams and ER comments retain source with line diagnostics', async () => {
-  for (const diagram of ['pie\n"中文": 10', '%%{init: {}}%%\ngraph TD\nA-->B', 'graph TD', 'erDiagram\nUSER {\n string name "姓名"\n}']) {
+  for (const diagram of ['pie\n"中文": 10', '%%{init: {flowchart: {curve: "basis"}}}%%\ngraph TD\nA-->B', 'graph TD', 'erDiagram\nUSER {\n string name "姓名"\n}']) {
     const parsed = parseMarkdown('# 标题\n\n' + fence(diagram), defaults);
     const result = await convert(parsed, [], [], defaults);
     assert.equal(result.warnings[0].code, 'MERMAID_NOT_RENDERED');
@@ -258,5 +258,159 @@ test('truncated readability hints do not reject strict export but omitted degrad
     const incomplete = await h.call({ ...source(text + '\n\n' + fence('pie\n"A": 1')), strict: true });
     assert.equal(incomplete.isError, true);
     assert.equal(code(incomplete), 'CONTENT_INCOMPLETE');
+  } finally { await h.close(); }
+});
+
+test('enhanced node styles size layout before drawing, including nested nodes and default classes', () => {
+  const doc = text => new JSDOM(staticDiagramSvg(renderMermaidSVG(text)), { contentType: 'image/svg+xml' });
+  const source = 'graph TD\nsubgraph group [组]\nA[中文字号] --> B[结束]\nend\n';
+  const base = doc(source);
+  const enhanced = doc(source + 'classDef default font-size:24pt\nstyle A font-size:32px,stroke-dasharray:9\\,3');
+  try {
+    const node = enhanced.window.document.querySelector('.node[data-id="A"]');
+    const before = base.window.document.querySelector('.node[data-id="A"]');
+    assert.equal(node.querySelector('text').getAttribute('font-size'), '32');
+    assert.ok(Number(node.querySelector('rect').getAttribute('width')) > Number(before.querySelector('rect').getAttribute('width')));
+    assert.equal(node.querySelector('rect').getAttribute('stroke-dasharray'), '9 3');
+    assert.equal(enhanced.window.document.querySelector('.node[data-id="B"] text').getAttribute('font-size'), '32');
+    const fallback = doc(source + 'style A font-size:99999px');
+    try { assert.equal(fallback.window.document.querySelector('.node[data-id="A"] text').getAttribute('font-size'), '13'); }
+    finally { fallback.window.close(); }
+  } finally { base.window.close(); enhanced.window.close(); }
+});
+
+test('custom dash patterns produce gaps in the actual PNG node border', async () => {
+  const source = 'graph TD\nA[中文]\nstyle A fill:#ffffff,stroke:#000000,stroke-width:2,stroke-dasharray:9 3';
+  const svg = staticDiagramSvg(renderMermaidSVG(source));
+  const dom = new JSDOM(svg, { contentType: 'image/svg+xml' });
+  try {
+    const box = dom.window.document.querySelector('.node rect');
+    const { data, info } = await sharp(Buffer.from(svg), { density: 144 }).flatten({ background: '#ffffff' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const y = Math.round(Number(box.getAttribute('y')) * 2);
+    const left = Math.ceil(Number(box.getAttribute('x')) * 2) + 5;
+    const right = left + Math.floor(Number(box.getAttribute('width')) * 2) - 10;
+    let ink = 0, gaps = 0;
+    for (let x = left; x < right; x++) {
+      const offset = (y * info.width + x) * info.channels;
+      if (data[offset] < 80) ink++;
+      if (data[offset] > 240) gaps++;
+    }
+    assert.ok(ink > 20 && gaps > 10, `border ink=${ink}, gaps=${gaps}`);
+    const edges = new JSDOM(renderMermaidSVG('graph TD\nA-->B\nlinkStyle default stroke-dasharray:7 4'), { contentType: 'image/svg+xml' });
+    try { assert.ok(edges.window.document.querySelector('[stroke-dasharray="7 4"]')); } finally { edges.window.close(); }
+  } finally { dom.window.close(); }
+});
+
+test('init and YAML themes reach PNG pixels and keep successive renders isolated', async () => {
+  const graph = 'graph TD\nA[主题]-->B[完成]';
+  const red = await renderDiagram("%%{init: {theme:'base', themeVariables:{primaryColor:'#f00',background:'#123456'}}}%%\n" + graph, defaults);
+  const yaml = await renderDiagram('---\nconfig:\n  theme: dark\n  flowchart:\n    nodeSpacing: 30\n    rankSpacing: 40\n---\n' + graph, defaults);
+  const pixels = async image => sharp(image.data).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const r = await pixels(red);
+  assert.deepEqual([...r.data.subarray((r.info.width * 4 + 4) * r.info.channels, (r.info.width * 4 + 4) * r.info.channels + 3)], [18, 52, 86]);
+  let redPixels = 0;
+  for (let i = 0; i < r.data.length; i += r.info.channels) if (r.data[i] > 240 && r.data[i + 1] < 10 && r.data[i + 2] < 10) redPixels++;
+  assert.ok(redPixels > 100);
+  const d = await pixels(yaml); assert.deepEqual([...d.data.subarray((d.info.width * 4 + 4) * d.info.channels, (d.info.width * 4 + 4) * d.info.channels + 3)], [31, 32, 32]);
+  const plain = await pixels(await renderDiagram(graph, defaults));
+  assert.deepEqual([...plain.data.subarray(0, 3)], [255, 255, 255]);
+  await assert.rejects(renderDiagram('---\nconfig: &c\n  theme: dark\ncopy: *c\n---\n' + graph, defaults));
+  await assert.rejects(renderDiagram("%%{init:{themeVariables:{background:'url(https://example.com)'}}}%%\n" + graph, defaults));
+});
+
+test('unsupported cosmetic theme variables warn but allow strict export', async () => {
+  const h = await harness();
+  try {
+    const result = await h.call({ ...source(fence("%%{init:{themeVariables:{fontFamily:'remote-font'}}}%%\ngraph TD\nA-->B")), strict: true });
+    assert.equal(result.isError, false, JSON.stringify(result));
+    assert.ok(result.value.warnings.some(w => w.code === 'MERMAID_STYLE_UNSUPPORTED' && w.severity === 'info'));
+  } finally { await h.close(); }
+});
+
+test('compact edges retain endpoints, arrows and hyphenated node IDs', () => {
+  for (const line of ['A-->B', 'A-->B[完成]', 'us-east-->us-west', 'A-.->B', 'A---B']) {
+    const dom = new JSDOM(renderMermaidSVG('graph TD\n' + line), { contentType: 'image/svg+xml' });
+    try {
+      assert.equal(dom.window.document.querySelectorAll('.node').length, 2, line);
+      assert.ok(dom.window.document.querySelector('[data-from]'), line);
+    } finally { dom.window.close(); }
+  }
+});
+
+test('class shorthand and trailing semicolons keep compact edges', () => {
+  for (const line of ['A:::c-->B', 'A:::c-name --> B', 'A-->B;']) {
+    const dom = new JSDOM(renderMermaidSVG('graph TD\n' + line), { contentType: 'image/svg+xml' });
+    try {
+      assert.deepEqual([...dom.window.document.querySelectorAll('.node')].map(n => n.getAttribute('data-id')).sort(), ['A', 'B'], line);
+      assert.ok(dom.window.document.querySelector('[data-from="A"][data-to="B"]'), line);
+    } finally { dom.window.close(); }
+  }
+});
+
+test('unparsed flowchart statements degrade instead of silently dropping content', async () => {
+  const h = await harness();
+  try {
+    for (const line of ['A-.x[Hi] --> B', 'A-->B C', 'A-->', '开始-->结束', 'A[未闭合节点']) {
+      assert.throws(() => renderMermaidSVG('graph TD\n' + line), /Unsupported flowchart statement/, line);
+      const args = source(fence('graph TD\n' + line));
+      const normal = await h.call(args);
+      assert.equal(normal.isError, false, JSON.stringify(normal));
+      assert.ok(normal.value.warnings.some(w => w.code === 'MERMAID_NOT_RENDERED'), line);
+      assert.equal((await h.call({ ...args, strict: true })).isError, true, line);
+    }
+  } finally { await h.close(); }
+});
+
+test('double hyphens in node IDs preserve labels, endpoints and compact edges', async () => {
+  for (const line of [
+    'foo--bar[Hello] --> B[End]',
+    'foo--bar --> B[End]',
+    'foo--bar[Hello]-->B[End]',
+    'foo--bar-->B[End]',
+    'foo--bar-.->B[End]',
+    'foo--bar---B[End]',
+    'foo--bar -- next --> B[End]',
+  ]) {
+    const dom = new JSDOM(renderMermaidSVG('graph TD\n' + line), { contentType: 'image/svg+xml' });
+    try {
+      const doc = dom.window.document;
+      assert.deepEqual([...doc.querySelectorAll('.node')].map(n => n.getAttribute('data-id')).sort(), ['B', 'foo--bar'], line);
+      assert.ok(doc.querySelector('.node[data-id="foo--bar"] text').textContent.includes(line.includes('[Hello]') ? 'Hello' : 'foo--bar'), line);
+      assert.ok(doc.querySelector('.node[data-id="B"] text').textContent.includes('End'), line);
+      assert.ok(doc.querySelector('[data-from="foo--bar"][data-to="B"]'), line);
+    } finally { dom.window.close(); }
+  }
+  const h = await harness();
+  try {
+    const result = await h.call({ ...source(fence('graph TD\nfoo--bar[Hello] --> B[End]')), strict: true });
+    assert.equal(result.isError, false, JSON.stringify(result));
+    assert.deepEqual(result.value.warnings, []);
+  } finally { await h.close(); }
+});
+
+test('unsupported style values keep diagrams and warn without rejecting strict export', async () => {
+  const h = await harness();
+  try {
+    for (const declaration of [
+      'style A font-size:1.2em',
+      'classDef default font-size:1.2em',
+      'style A font-size:99999px',
+      'style A stroke-dasharray:5px 5px',
+      'classDef default stroke-dasharray:5px 5px',
+      'linkStyle default stroke-dasharray:5px 5px',
+      'linkStyle 0, 1 stroke-dasharray:5px 5px;',
+      'style A stroke-dasharray:1001 2',
+    ]) {
+      const graph = 'graph TD\nA[Hello]-.->B[End]\nB-->C\n' + declaration;
+      const result = await h.call({ ...source(fence(graph)), strict: true });
+      assert.equal(result.isError, false, declaration + ': ' + JSON.stringify(result));
+      assert.ok(result.value.warnings.some(w => w.code === 'MERMAID_STYLE_UNSUPPORTED' && w.severity === 'info'), declaration);
+      assert.ok(!result.value.warnings.some(w => w.code === 'MERMAID_NOT_RENDERED'), declaration);
+      const dom = new JSDOM(renderMermaidSVG(graph), { contentType: 'image/svg+xml' });
+      try {
+        assert.equal(dom.window.document.querySelector('.node[data-id="A"] text').getAttribute('font-size'), '13');
+        assert.ok(dom.window.document.querySelector('[data-from="A"][data-to="B"][stroke-dasharray="4 4"]'), declaration);
+      } finally { dom.window.close(); }
+    }
   } finally { await h.close(); }
 });

@@ -1,3 +1,4 @@
+import { prepareDiagram } from './diagram-config.js';
 import { JSDOM } from 'jsdom';
 import sharp from 'sharp';
 import type { Limits } from '../config.js';
@@ -22,6 +23,7 @@ export function staticDiagramSvg(svg: string): string {
     const declaration = /(--[\w-]+)\s*:\s*([^;}\n]+)/g;
     const styles = Array.from(doc.querySelectorAll('style'));
     for (const style of styles) for (const match of (style.textContent ?? '').matchAll(declaration)) variables.set(match[1], match[2].trim());
+    for (const match of (root.getAttribute('style') ?? '').matchAll(declaration)) variables.set(match[1], match[2].trim());
     const resolve = (input: string): string => {
       let result = input;
       for (let i = 0; i < 20 && /var\(|color-mix\(/.test(result); i++) {
@@ -36,6 +38,10 @@ export function staticDiagramSvg(svg: string): string {
     };
     for (const style of styles) style.textContent = resolve((style.textContent ?? '').replace(/@import[^;]*;/g, '').replace(declaration, ''));
     root.removeAttribute('style');
+    const background = doc.createElementNS(root.namespaceURI, 'rect');
+    background.setAttribute('width', '100%'); background.setAttribute('height', '100%');
+    background.setAttribute('fill', resolve('var(--bg)'));
+    root.insertBefore(background, root.firstChild);
     for (const el of Array.from(doc.querySelectorAll('*'))) {
       if (['script', 'foreignObject', 'image', 'use', 'a', 'animate', 'set'].includes(el.localName)) throw new Error('Unsupported SVG element');
       for (const attr of Array.from(el.attributes)) {
@@ -54,13 +60,12 @@ export function staticDiagramSvg(svg: string): string {
   } finally { dom.window.close(); }
 }
 
-export interface RenderedDiagram extends EmbeddedImage { minTextPt: number; layoutAdjusted?: boolean }
+export interface RenderedDiagram extends EmbeddedImage { minTextPt: number; layoutAdjusted?: boolean; styleNotes?: string[] }
 
 export async function renderDiagram(source: string, limits: Limits, bounds: ImageBounds = { maxWidth: 560, maxHeight: MAX_IMAGE_HEIGHT }): Promise<RenderedDiagram> {
   if (Buffer.byteLength(source) > 50_000) throw new ExportError('Mermaid source exceeds the 50 KB diagram limit.', 'LIMIT_EXCEEDED');
-  // The lightweight parser silently ignores some official directives; fail visibly.
-  if (/^\s*(?:%%\{|---|click\s)/m.test(source)) throw new Error('Unsupported Mermaid configuration');
-  const normalized = source.split('\n').filter(line => !line.trim().startsWith('%%')).join('\n').trim();
+  const prepared = prepareDiagram(source);
+  const normalized = prepared.source;
   if (!/^(?:(?:flowchart|graph)\s+(?:TD|TB|BT|LR|RL)\b|stateDiagram(?:-v2)?\b|sequenceDiagram\b|classDiagram\b|erDiagram\b|xychart(?:-beta)?\b)/i.test(normalized)) throw new Error('Unsupported Mermaid diagram type');
   if (/^erDiagram\b/i.test(normalized) && /^\s*\S+\s+\S+(?:\s+(?:PK|FK|UK)[,\s]*)*\s+"[^"]*"\s*$/m.test(normalized)) throw new Error('ER field comments are not rendered');
   const { renderMermaidSVG } = await import('./mermaid-renderer.js');
@@ -68,7 +73,7 @@ export async function renderDiagram(source: string, limits: Limits, bounds: Imag
     const svg = staticDiagramSvg(renderMermaidSVG(text, {
       font: 'sans-serif', bg: palette['--bg'], fg: palette['--fg'], line: palette['--line'],
       accent: palette['--accent'], muted: palette['--muted'], surface: palette['--surface'], border: palette['--border'],
-      padding: compact ? 8 : 24, ...(compact ? { nodeSpacing: 12, layerSpacing: 16 } : {}), interactive: false,
+      ...prepared.options, padding: compact ? 8 : 24, ...(compact ? { nodeSpacing: 12, layerSpacing: 16 } : {}), interactive: false,
     }));
     if (!/<text\b/.test(svg)) throw new Error('Empty diagram');
     if (Buffer.byteLength(svg) > limits.maxImageBytes) throw new ExportError('Mermaid SVG exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
@@ -109,5 +114,5 @@ export async function renderDiagram(source: string, limits: Limits, bounds: Imag
     }
   }
   data ??= await rasterize(selected);
-  return { data, type: 'png', width: selected.width, height: selected.height, displayWidth: selected.displayWidth, minTextPt: selected.minTextPt, layoutAdjusted };
+  return { data, type: 'png', width: selected.width, height: selected.height, displayWidth: selected.displayWidth, minTextPt: selected.minTextPt, layoutAdjusted, styleNotes: prepared.notes };
 }

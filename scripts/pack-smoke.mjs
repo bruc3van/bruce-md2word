@@ -63,7 +63,7 @@ try {
   if (Object.keys(installed.bin).join() !== 'bruce-md2word' || installed.bin['bruce-md2word'] !== 'lib/cli.js') throw new Error('Unexpected CLI entry points');
   const version = npm(['exec', '--offline', '--', 'bruce-md2word', '--version'], { cwd: temp, encoding: 'utf8' });
   if (version !== installed.version + '\n') throw new Error('Packaged CLI version does not match the installed package');
-  const result = JSON.parse(npm(['exec', '--offline', '--', 'bruce-md2word', '-', '--strict', '-o', 'packed.docx'], { cwd: temp, input: '<!-- word:document {"preset":"technical","toc":true,"pageNumbers":true} -->\n\n# Packed CLI\n\n中文与 **bold** $x_i^2$，脚注[^note]。\n\n[^note]: Native footnote.\n\n~~~mermaid\ngraph TD\nA[中文请求]-->B[完成]\n~~~', encoding: 'utf8' }));
+  const result = JSON.parse(npm(['exec', '--offline', '--', 'bruce-md2word', '-', '--strict', '-o', 'packed.docx'], { cwd: temp, input: '<!-- word:document {"preset":"technical","toc":true,"pageNumbers":true} -->\n\n# Packed CLI\n\n中文与 **bold** $x_i^2$，脚注[^note]。\n\n[^note]: Native footnote.\n\n~~~mermaid\n%%{init: {theme:"base",themeVariables:{primaryColor:"#dcfce7"}}}%%\ngraph TD\nA[中文请求]-->B[完成]\nstyle A font-size:24px,stroke-dasharray:9 3\n~~~\n\n~~~mermaid\n---\nconfig:\n  theme: dark\n---\ngraph TD\nA-->B\n~~~', encoding: 'utf8' }));
   if (result.protocol !== 1 || result.fileName !== 'packed.docx' || result.sizeBytes <= 0 || result.warnings.length) throw new Error('Invalid packaged CLI result');
   const { default: JSZip } = await import('jszip');
   const packedZip = await JSZip.loadAsync(await readFile(result.path));

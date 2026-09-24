@@ -8,10 +8,34 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
 // Adapt only the pinned renderer at build time; never modify node_modules or the host.
 const rendererRoot = path.resolve('node_modules/beautiful-mermaid');
 if (JSON.parse(readFileSync(path.join(rendererRoot, 'package.json'), 'utf8')).version !== '1.1.3') throw new Error('Review Mermaid adaptations before upgrading the renderer');
+const replaceOnce = (source, before, after, file) => {
+  if (source.split(before).length !== 2) throw new Error(`Mermaid patch target changed: ${file}`);
+  return source.replace(before, after);
+};
 const adaptRenderer = {
   name: 'mermaid-layout-adaptations',
   setup(plugin) {
     plugin.onResolve({ filter: /^beautiful-mermaid$/ }, () => ({ path: path.join(rendererRoot, 'src/index.ts') }));
+    plugin.onLoad({ filter: /beautiful-mermaid[/\\]src[/\\](?:layout-engine|renderer)\.ts$/ }, ({ path: file }) => {
+      let contents = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+      const replace = (before, after) => { contents = replaceOnce(contents, before, after, file); };
+      if (path.basename(file) === 'layout-engine.ts') {
+        replace('function estimateNodeSize(id: string, label: string, shape: string)', 'function estimateNodeSize(id: string, label: string, shape: string, style?: Record<string, string>)');
+        replace('measureMultilineText(label, FONT_SIZES.nodeLabel, FONT_WEIGHTS.nodeLabel)', 'measureMultilineText(label, diagramFontSize(style), FONT_WEIGHTS.nodeLabel)');
+        for (const id of ['id', 'nodeId']) replace(`estimateNodeSize(${id}, node.label, node.shape)`, `estimateNodeSize(${id}, node.label, node.shape, resolveNodeStyle(${id}, graph))`);
+        replace('let result: Record<string, string> | undefined\n\n  // First, apply class styles', "let result: Record<string, string> | undefined = graph.classDefs.get('default')\n\n  // First, apply class styles");
+        replace('result = { ...classDef }', 'result = { ...result, ...classDef }');
+      } else {
+        replace('const shape = renderNodeShape(node)', `const dash = diagramDash(node.inlineStyle)
+  const shape = renderNodeShape(node).replace(/<(rect|circle|ellipse|polygon|path|line)\\b/g, (tag) => dash === undefined ? tag : tag + ' stroke-dasharray="' + dash + '"')`);
+        replace(`const dashArray = edge.style === 'dotted' ? ' stroke-dasharray="4 4"' : ''`, `const dash = diagramDash(edge.inlineStyle) ?? (edge.style === 'dotted' ? '4 4' : undefined)
+  const dashArray = dash === undefined ? '' : ' stroke-dasharray="' + dash + '"'`);
+        replace('    FONT_SIZES.nodeLabel,', '    diagramFontSize(node.inlineStyle),');
+        replace('font-size="${FONT_SIZES.nodeLabel}"', 'font-size="${diagramFontSize(node.inlineStyle)}"');
+      }
+      contents = `import { diagramFontSize, diagramDash } from ${JSON.stringify(path.resolve('src/core/diagram-style.ts'))};\n` + contents;
+      return { contents, loader: 'ts', resolveDir: path.dirname(file) };
+    });
     plugin.onLoad({ filter: /beautiful-mermaid[/\\]src[/\\]theme\.ts$/ }, ({ path: file }) => {
       let contents = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
       // Font resolution is local; omit the upstream web-font imports entirely.
@@ -27,6 +51,23 @@ const adaptRenderer = {
       // The pinned state parser silently drops unmatched lines (including notes).
       // Reject at its actual fallthrough so unsupported content reaches our
       // source-preserving degradation path instead of producing a partial image.
+      contents = replaceOnce(contents, "cleaned.split(',')", "cleaned.split(/(?<!\\\\),/)", file);
+      contents = replaceOnce(contents, "pair.slice(colonIdx + 1).trim()", "pair.slice(colonIdx + 1).trim().replace(/\\\\,/g, ',')", file);
+      const nodeStart = contents.indexOf('const NODE_PATTERNS:');
+      const nodeEnd = contents.indexOf('/** Regex for :::', nodeStart);
+      const nodePatterns = contents.slice(nodeStart, nodeEnd);
+      const identifier = String.raw`([\w-]+)`;
+      if (nodeStart < 0 || nodeEnd < 0 || nodePatterns.split(identifier).length !== 14) throw new Error('Mermaid node parser patch target changed');
+      // Stop at complete edge operators (or a spaced label opener), not at
+      // double hyphens inside IDs such as foo--bar.
+      contents = contents.slice(0, nodeStart) + nodePatterns.replaceAll(identifier, String.raw`((?:(?!-->|---|-\.-|--\s)[\w-])+)`) + contents.slice(nodeEnd);
+      contents = replaceOnce(contents, String.raw`const CLASS_SHORTHAND_REGEX = /^:::([\w][\w-]*)/`, String.raw`const CLASS_SHORTHAND_REGEX = /^:::(\w(?:(?!-->|---|-\.-|--\s)[\w-])*)/`, file);
+      // The pinned flowchart parser also stops silently at unparsed edge text
+      // (dropping later nodes and edges); reject it like the state fallthrough.
+      const unsupportedEdge = "throw new Error('Unsupported flowchart statement: ' + line)";
+      contents = replaceOnce(contents, 'if (!firstGroup || firstGroup.ids.length === 0) return', `if (!firstGroup || firstGroup.ids.length === 0) ${unsupportedEdge}`, file);
+      contents = replaceOnce(contents, 'if (!textMatch) break', `if (!textMatch) { if (remaining === ';') break; ${unsupportedEdge} }`, file);
+      contents = replaceOnce(contents, 'if (!nextGroup || nextGroup.ids.length === 0) break', `if (!nextGroup || nextGroup.ids.length === 0) ${unsupportedEdge}`, file);
       const before = "registerStateNode(graph, compositeStack, { id, label, shape: 'rounded' })\n      continue\n    }\n  }\n\n  return graph";
       if (contents.split(before).length !== 2) throw new Error(`Mermaid state parser patch target changed: ${file}`);
       contents = contents.replace(before, before.replace('    }\n  }', "    }\n    throw new Error('Unsupported state diagram statement: ' + line)\n  }"));
