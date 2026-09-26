@@ -38,12 +38,13 @@ export async function runCli(ctx: Context, args: WordExportInput, exec: ToolExec
   const options = { ...Object.fromEntries(Object.keys(defaults).map(key => [key, config[key as keyof typeof defaults]])), allowedReadRoots: config.allowedReadRoots };
   const stdin = JSON.stringify({ protocol: 1, input: args, config: options });
   if (Buffer.byteLength(stdin) > 32 * 1024 * 1024) throw new ExportError('CLI request exceeds the transport limit.', 'LIMIT_EXCEEDED');
-  const result = await shell.run(shell.resolve({
+  const spec = shell.resolve({
     // Only administrator configuration becomes shell syntax. Model-controlled
     // paths, Markdown and filenames travel exclusively through stdin.
     command: `${config.cliCommand ?? bundledCommand()} --request`, stdin, workdir: cwd,
-    signal, timeoutMs: config.timeoutMs, stdoutMaxBytes: 1024 * 1024, sandboxPolicy,
-  }));
+    signal, timeoutMs: config.timeoutMs, onExpiry: 'kill', stdoutMaxBytes: 1024 * 1024, sandboxPolicy,
+  });
+  const result = await (await shell.execute(spec)).result();
   signal.throwIfAborted();
   if (result.sandbox?.denied) throw new HarnessError('DOCX export was denied by the shell sandbox.', 'FS_SANDBOX_DENIED');
   if (result.sandbox?.runnerFailed) throw new ExportError('The configured sandbox runner failed to start DOCX export.', 'CONFIGURATION_ERROR');

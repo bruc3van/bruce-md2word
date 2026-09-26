@@ -1,3 +1,9 @@
+# v0.6.0
+
+- DSH 插件仅支持 `0.1.7-rc.2` 与 Cordis `~4.0.4`，移除旧版宿主兼容。
+- 项目导出使用 `shell.execute()` / `result()`，显式设置超时终止策略；执行失败不会重试或绕过沙箱。
+- 更新新版 DSH 开发依赖与独立安装包验证，补充执行器回归测试和 npm 安装说明。
+
 # v0.5.0
 
 - Mermaid 流程图支持 `style` / `classDef`（含 `classDef default`）中的节点 `font-size`，字号同时参与布局和绘制；节点与 `linkStyle` 支持 `stroke-dasharray`，逗号可用 `\,` 转义。

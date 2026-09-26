@@ -4,6 +4,8 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 const root = process.cwd();
+const dshVersion = '0.1.7-rc.2';
+const cordisVersion = '4.0.4';
 // npm run supplies the actual npm JS entry point on every OS, avoiding .cmd
 // shims and shell quoting on Windows (including paths containing spaces).
 const npmCli = process.env.npm_execpath;
@@ -19,7 +21,11 @@ try {
   }
   tarball = path.join(root, manifest[0].filename);
   await writeFile(path.join(temp, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-  npm(['install', '--ignore-scripts', '--no-audit', '--no-fund', tarball, '@deepseek-ai/dsh-fs-local@0.1.6-alpha.2', '@deepseek-ai/dsh-attachment-local@0.1.6-alpha.2', '@deepseek-ai/dsh-subprocess-local@0.1.6-alpha.2', `@deepseek-ai/dsh-${process.platform === 'win32' ? 'pwsh' : 'bash'}-local@0.1.6-alpha.2`], { cwd: temp, stdio: 'inherit' });
+  const peers = ['attachment', 'fs', 'llm', 'sandbox-policy', 'shell', 'skill', 'tools'];
+  const providers = ['fs-local', 'attachment-local', 'subprocess-local', `${process.platform === 'win32' ? 'pwsh' : 'bash'}-local`];
+  npm(['install', '--ignore-scripts', '--no-audit', '--no-fund', tarball, `@deepseek-ai/cordis@${cordisVersion}`,
+    ...[...peers, ...providers].map(name => `@deepseek-ai/dsh-${name}@${dshVersion}`)], { cwd: temp, stdio: 'inherit' });
+  console.log('Testing packed plugin against DSH ' + dshVersion);
   await writeFile(path.join(temp, 'smoke.mjs'), `
 import assert from 'node:assert/strict';
 import { Context } from '@deepseek-ai/cordis';

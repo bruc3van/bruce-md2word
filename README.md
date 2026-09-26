@@ -85,7 +85,7 @@ Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，优先复�
 
 `beautiful-mermaid` 虽列于开发依赖，其渲染代码及相关依赖会随安装包内置。CLI 所需的部分 DSH 文件访问和运行辅助代码也在构建时打包；独立使用不要求启动 DSH 服务。`sharp` 的平台原生包及其他传递依赖会出现在安装清单中，具体以包管理器解析结果为准。
 
-DSH 插件另外依赖宿主的 Cordis、工具、文件和执行器服务：当前声明 Cordis `4.0.2`，DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`。默认项目模式需要 `tools` 与 `shell`；附件模式需要 `fs` 和 `attachments`；`skills` 服务可选。依赖中的 `dsh-llm` 用于宿主类型与错误接口，不代表转换过程调用模型。完整声明见 [package.json](package.json)，运行条件见 [Agent 参考](docs/agent-reference.md#环境与工具注册)。
+DSH 插件另外依赖宿主的 Cordis、工具、文件和执行器服务：当前声明 Cordis `~4.0.4`，DSH 服务包 `0.1.7-rc.2`。默认项目模式需要 `tools` 与 `shell`；附件模式需要 `fs` 和 `attachments`；`skills` 服务可选。依赖中的 `dsh-llm` 用于宿主类型与错误接口，不代表转换过程调用模型。完整声明见 [package.json](package.json)，运行条件见 [Agent 参考](docs/agent-reference.md#环境与工具注册)。
 
 从源码构建还使用 TypeScript、esbuild、类型声明和 DSH 本地测试服务。直接安装已发布 npm 包无需手动配置这些开发工具。本项目采用 MIT 许可证；第三方代码保留各自许可证，来源见 [NOTICE](NOTICE)，打包组件的许可证随包存放于 `lib/CLI-LICENSES.txt` 和 `lib/MERMAID-LICENSES.txt`。
 
@@ -125,7 +125,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.5.0
+npm install -g bruce-md2word@0.6.0
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -138,12 +138,12 @@ npm install -g bruce-md2word@0.5.0
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.5.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24，然后安装 bruce-md2word@0.6.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.5.0
+npm install -g bruce-md2word@0.6.0
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -156,23 +156,25 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 
 把下面这句话发给 DSH Agent：
 
-> 请帮我安装这个 DSH 插件，并告诉我如何使用：https://github.com/bruc3van/bruce-md2word
+> 请从 npm 安装 DSH 插件 bruce-md2word，先核对该版本的 DSH 兼容范围，并告诉我如何使用。项目说明：https://github.com/bruc3van/bruce-md2word
 
-安装后重启对应 DSH 服务，即可让 Agent 导出 Word，无需另装 CLI 或 Skill。
+安装时使用 npm 包名或精确版本，不要把 GitHub 说明链接作为 Git 依赖，也不要把 `[文字](URL)` 这样的 Markdown 链接传给安装命令。安装后重启对应 DSH 服务，即可让 Agent 导出 Word，无需另装 CLI 或 Skill。
+
+若日志停在 `git ls-remote` 并提示未同意 Xcode 许可，说明安装尚未进入插件加载阶段。npm 包安装不需要从 GitHub 拉取源码；确实需要 Git 源码安装时，应由用户在终端运行 `sudo xcodebuild -license`，阅读并自行决定是否同意许可。
 
 <details>
 <summary>手动安装命令与环境要求</summary>
 
-当前包要求 Node.js `>=24 <25`、DSH 服务包 `0.1.5-rc.2` 或 `0.1.6-alpha.2`、Cordis `4.0.2`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
+当前包要求 Node.js `>=24 <25`、DSH 服务包 `0.1.7-rc.2`、Cordis `~4.0.4`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.5.0
+dsh plugin --profile web add bruce-md2word@0.6.0
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.5-rc.2 plugin --profile web add bruce-md2word@0.5.0
+npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.6.0
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。

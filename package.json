@@ -1,6 +1,6 @@
 {
   "name": "bruce-md2word",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "面向 AI Agent 的 Markdown 转 Word 工具，提供开箱即用的中文排版、Mermaid 图表转图片和可编辑数学公式，提供Skill、独立 CLI 和 DSH 插件。",
   "type": "module",
   "main": "lib/index.js",
@@ -59,14 +59,14 @@
     "yaml": "2.9.1"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "4.0.2",
-    "@deepseek-ai/dsh-attachment": "0.1.5-rc.2 || 0.1.6-alpha.2",
-    "@deepseek-ai/dsh-fs": "0.1.5-rc.2 || 0.1.6-alpha.2",
-    "@deepseek-ai/dsh-llm": "0.1.5-rc.2 || 0.1.6-alpha.2",
-    "@deepseek-ai/dsh-sandbox-policy": "0.1.5-rc.2 || 0.1.6-alpha.2",
-    "@deepseek-ai/dsh-shell": "0.1.5-rc.2 || 0.1.6-alpha.2",
-    "@deepseek-ai/dsh-skill": "0.1.5-rc.2 || 0.1.6-alpha.2",
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.2 || 0.1.6-alpha.2"
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-attachment": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-fs": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-llm": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-shell": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-skill": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tools": "0.1.7-rc.2"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-attachment": {
@@ -83,14 +83,20 @@
     }
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-attachment-local": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-bash-local": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-fs-local": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-home-paths": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-pwsh-local": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-shell": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-skill": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-subprocess-local": "0.1.6-alpha.2",
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-attachment": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-attachment-local": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-bash-local": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-fs": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-fs-local": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-home-paths": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-llm": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-pwsh-local": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-shell": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-skill": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-subprocess-local": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
     "@types/bmp-js": "^0.1.2",
     "@types/jsdom": "^27.0.0",
     "@types/markdown-it": "^14.1.2",
