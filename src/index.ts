@@ -16,6 +16,6 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
     const queue = new TaskQueue(resolved.concurrency, resolved.queueSize, resolved.timeoutMs);
     scoped.effect(() => () => queue.dispose(), 'bruce-md2word tasks');
     scoped.tools.register(createWordExport(scoped, resolved, queue));
-    if (resolved.skill) registerGuidanceSkill(scoped);
+    if (resolved.skill) registerGuidanceSkill(scoped, resolved.delivery);
   });
 }

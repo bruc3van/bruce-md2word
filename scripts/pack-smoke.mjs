@@ -16,7 +16,7 @@ let tarball;
 try {
   const manifest = JSON.parse(npm(['pack', '--json'], { encoding: 'utf8', cwd: root }));
   if (manifest[0].name !== 'bruce-md2word') throw new Error('Unexpected package name');
-  for (const required of ['skills/bruce-md2word/SKILL.md', 'skills/bruce-md2word/references/diagnostics.md', 'docs/document-layout.md']) {
+  for (const required of ['skills/bruce-md2word/SKILL.md', 'skills/bruce-md2word/references/diagnostics.md', 'skills/bruce-md2word/references/install.md', 'skills/bruce-md2word/references/document-layout.md', 'docs/document-layout.md']) {
     if (!manifest[0].files.some(file => file.path === required)) throw new Error('Missing packed skill file: ' + required);
   }
   tarball = path.join(root, manifest[0].filename);

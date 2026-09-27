@@ -1,3 +1,12 @@
+# v0.6.3
+
+- Skill 引导 Agent 保持 CLI 为最新稳定版：每个会话首次使用时检查一次，全局安装落后时更新并说明版本变化；项目依赖、用户指定版本和宿主批准版本只提示可用更新，离线时沿用已有版本。安装细节移至 `references/install.md`，Skill 正文更精简。
+- Skill 随附排版说明 `references/document-layout.md`（构建时由 `docs/document-layout.md` 生成），通过 `npx skills add` 安装后排版链接不再失效；正文内联 `word:document` 最小示例。
+- 严格失败时 Skill 直接读取 `error.diagnostics` 修正源稿，不再默认生成诊断文档；诊断说明补齐 `LINK_UNAVAILABLE`、`IMAGE_FIRST_FRAME`、`LIST_DEPTH_REDUCED` 等降级代码和 `FS_*` 错误，并标明严重级别。
+- Skill 在已提供 `word_export` 工具的 DSH 环境中直接使用该工具，避免与插件内置说明同名时重复准备 CLI。
+- 插件内置使用说明按项目或附件交付模式生成，新增 `whenToUse` 和包目录资源基准，可解析 `docs/document-layout.md`；补充严格诊断、公式与脚注数量上限等说明。
+- 同步 README 与 Agent 参考中关于严格诊断和 CLI 更新的描述。
+
 # v0.6.2
 
 - 中文、日文等 CJK 正文和脚注的普通源文件换行不再插入多余空格；英文、韩文仍保留词间空格。行内代码在标题中继承标题字号，正文维持 11 pt。

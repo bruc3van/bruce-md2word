@@ -58,7 +58,7 @@ Agent 可以导出已有 Markdown 文件，也可以直接传入生成的正文�
 
 DSH 项目模式通过宿主执行器运行 CLI，正文和文件参数以标准输入 JSON 传递，不拼接为 shell 命令，并传递宿主的沙箱策略；沙箱执行失败时不会自动退回无沙箱执行。独立 CLI 的文件检查和转换 worker 不等于操作系统级沙箱，实际权限取决于运行账号和宿主配置。DSH 附件模式则由宿主附件服务决定存储与交付位置。
 
-Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，优先复用已有且符合宿主策略的可用 CLI；缺少可用版本或需要更新时，遵循宿主的安装审计、权限审批、包成熟期和构建授权规则，不自动追随 latest，也不自行添加安装豁免。它不替代 Agent 平台自身的数据与执行策略。源码、[依赖清单](package.json)、[锁文件](package-lock.json)和[自动化检查](https://github.com/bruc3van/bruce-md2word/actions)均可查看。这些措施便于核查实现，但不表示经过独立安全认证或不存在第三方依赖风险。
+Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，会把全局安装的 CLI 更新到 npm 稳定版，但不改动项目锁定版本；安装或更新时遵循宿主的安装审计、权限审批、包成熟期和构建授权规则，不自行添加安装豁免。它不替代 Agent 平台自身的数据与执行策略。源码、[依赖清单](package.json)、[锁文件](package-lock.json)和[自动化检查](https://github.com/bruc3van/bruce-md2word/actions)均可查看。这些措施便于核查实现，但不表示经过独立安全认证或不存在第三方依赖风险。
 
 ## 运行环境与依赖
 
@@ -121,12 +121,12 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 
 默认安装到当前项目；添加 `-g` 可安装到用户级目录，添加 `-a <agent>` 可指定目标 Agent。安装后按目标 Agent 的方式重新加载技能。
 
-`npx skills` 负责安装 Skill 文件。首次使用时，Agent 会按 Skill 检查 CLI，缺失时安装，版本落后时更新，然后继续导出；用户指定版本或项目锁定版本会被保留。需要 Node.js 24 或 26 和相应的命令执行权限。
+`npx skills` 负责安装 Skill 文件。每个会话首次使用时，Agent 会按 Skill 检查 CLI：缺失时安装，全局安装落后于 npm 稳定版时更新并说明版本变化，然后继续导出；项目依赖、用户指定版本和宿主批准版本保持不变，只提示可用更新。离线时继续使用已有版本。需要 Node.js 24 或 26 和相应的命令执行权限。
 
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.6.2
+npm install -g bruce-md2word@0.6.3
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -139,12 +139,12 @@ npm install -g bruce-md2word@0.6.2
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.6.2 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.6.3 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.6.2
+npm install -g bruce-md2word@0.6.3
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -169,13 +169,13 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 当前包要求 Node.js `^24 || ^26`、DSH 服务包 `0.1.7-rc.2`、Cordis `~4.0.4`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.6.2
+dsh plugin --profile web add bruce-md2word@0.6.3
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.6.2
+npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.6.3
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。

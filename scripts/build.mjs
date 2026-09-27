@@ -2,7 +2,9 @@ import { rmSync, chmodSync, readFileSync, writeFileSync, readdirSync, existsSync
 import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 import path from 'node:path';
+import { syncSkillDocs } from './sync-skill-docs.mjs';
 rmSync(new URL('../lib/', import.meta.url), { recursive: true, force: true });
+syncSkillDocs();
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 // Adapt only the pinned renderer at build time; never modify node_modules or the host.

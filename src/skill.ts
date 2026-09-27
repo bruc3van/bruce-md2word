@@ -1,12 +1,45 @@
+import { fileURLToPath } from 'node:url';
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-skill';
+import type { ResolvedConfig } from './config.js';
+/** Package root, so relative references such as docs/document-layout.md resolve. */
+const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+export function guidanceContent(delivery: ResolvedConfig['delivery']): string {
+  const saving = delivery === 'project'
+    ? 'The DOCX is saved under the current project output/ directory without overwriting; report the actual returned path (a numeric suffix may be added). fileName sets only the file name, never a directory.'
+    : 'The DOCX is delivered as a file attachment; return that attachment. Do not invent download URLs or treat attachmentId as a path.';
+  return `# Markdown to Word
+
+Call word_export; no setup command, CLI install or external converter is required.
+
+## Export
+
+- Prefer source {kind:"file"} for an existing .md/.markdown file; relative images resolve against its directory. For generated text use {kind:"markdown"} and supply assetBaseDir when it references relative images.
+- ${saving}
+- Use strict:true for final deliverables so degraded content is rejected. A CONTENT_INCOMPLETE error lists each diagnostic code and line; fix the Markdown and export again rather than dropping strict.
+- Explain every returned warning. Severity "degradation" fails strict; "info" does not. Stop retrying when the same failure repeats without a new fix.
+
+## Capabilities and limits
+
+- PNG/JPEG/GIF/BMP images embed (animated images keep only the first frame: IMAGE_FIRST_FRAME). Remote images are never fetched and input SVG is unsupported.
+- Mermaid flowchart, state, sequence, class, ER and XY diagrams render locally as PNG with a lightweight renderer, not full Mermaid compatibility. Unsupported diagrams retain source with MERMAID_NOT_RENDERED. MERMAID_LAYOUT_ADJUSTED (a too-wide flowchart was reflowed vertically), MERMAID_SMALL_TEXT (recommend splitting or simplifying) and MERMAID_STYLE_UNSUPPORTED (some flowchart styling not applied) are informational. Chinese labels use local fonts.
+- LaTeX inline and display formulas become editable Word equations. MATH_NOT_CONVERTED keeps the full source and is a degradation. Custom macros and equation numbering/references are unsupported.
+- Named footnotes become native Word footnotes. At most 1000 formulas and 1000 footnote definitions per export; beyond that the export fails with LIMIT_EXCEEDED, so split long documents.
+- Custom Word templates and editing existing DOCX files are not supported.
+
+## Layout
+
+Keep the default Chinese report layout unless the user asks otherwise. Options go in one directive as the first block, for example <!-- word:document {"preset":"technical","toc":true,"pageNumbers":true} -->; presets are chinese-report and technical. Font, size and margin overrides, heading numbering, figure/table captions and cross-references, landscape sections, table widths, list continuation and footnotes are documented in docs/document-layout.md. TOC, page numbers and references need a field update and visual check in Word/WPS.`;
+}
 /** Optional, reversible guidance for choosing the native export tool. */
-export function registerGuidanceSkill(ctx: Context): void {
+export function registerGuidanceSkill(ctx: Context, delivery: ResolvedConfig['delivery']): void {
   ctx.inject(['skills'], scoped => {
     scoped.effect(() => scoped.skills.register({
       name: 'bruce-md2word', source: 'runtime',
-      description: 'Export Markdown as an editable Word DOCX using word_export.',
-      content: '# Markdown to Word\n\nUse word_export for one Markdown file or Markdown text. Supply assetBaseDir for text containing relative images. By default the DOCX is saved under the current project output/ directory; report the actual returned path (a numeric suffix may avoid overwriting). If the administrator selected attachment delivery, return the resulting file attachment instead. Explain any warnings. LaTeX inline and display formulas convert to editable Word equations via Temml. MATH_NOT_CONVERTED preserves full formula source and is a degradation; strict rejects it. Custom macros, equation numbering/references and unsupported math structures are not supported. MERMAID_LAYOUT_ADJUSTED means a too-wide LR/RL flowchart was reflowed vertically while preserving nodes and links. MERMAID_SMALL_TEXT means labels remain too small; recommend splitting or simplifying. Both are informational and do not trigger strict rejection. Flowchart font-size, stroke-dasharray and a subset of init/YAML theme settings are supported; MERMAID_STYLE_UNSUPPORTED means some styling was not applied and is also informational. Use strict when degraded content must be rejected. Mermaid flowchart, state, sequence, class, ER and XY diagrams render locally as PNG images. This is a lightweight renderer, not full Mermaid compatibility. Unsupported diagrams/directives retain source and emit warnings. Remote images and input SVG are unsupported. Chinese rendering uses local fonts. Do not invent download URLs or treat attachmentId as a path. Document layout uses one first-block <!-- word:document {"preset":"technical","toc":true,"pageNumbers":true} --> directive. All options, caption references and landscape sections are documented in docs/document-layout.md in this package. Keep default layout unless requested otherwise. TOC and references need field updates and visual acceptance in Word/WPS. No setup command or external converter is required.',
+      description: 'Export Markdown or a newly written report as an editable Word DOCX with the native word_export tool, with Chinese layout, Mermaid diagrams and editable equations.',
+      whenToUse: 'The user wants a .docx/Word deliverable from Markdown or from content you write. Not for reading or editing existing Word files, PDF conversion or custom Word templates.',
+      resourceBase: { kind: 'directory', path: packageRoot },
+      content: guidanceContent(delivery),
     }), 'bruce-md2word guidance');
   });
 }
