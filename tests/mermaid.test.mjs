@@ -23,7 +23,7 @@ test('Chinese fixtures for all six diagram types embed seven valid PNGs in DOCX'
   assert.equal(parsed.diagrams.length, 7);
   assert.equal(parsed.images.length, 0); // Generated graphics never use the file reader.
   const result = await convert(parsed, [], [], defaults);
-  assert.ok(result.warnings.every(w => ['MERMAID_SMALL_TEXT', 'MERMAID_LAYOUT_ADJUSTED'].includes(w.code) && w.severity === 'info'));
+  assert.ok(result.warnings.every(w => ['MERMAID_SMALL_TEXT', 'MERMAID_LAYOUT_ADJUSTED', 'MERMAID_TEXT_ENLARGED'].includes(w.code) && w.severity === 'info'));
   await validateArtifact(result.data, defaults.maxOutputBytes);
   const zip = await JSZip.loadAsync(result.data);
   const media = Object.values(zip.files).filter(f => !f.dir && f.name.startsWith('word/media/'));
@@ -40,7 +40,7 @@ test('Chinese fixtures for all six diagram types embed seven valid PNGs in DOCX'
   assert.equal((xml.match(/<w:drawing>/g) ?? []).length, 7);
   assert.doesNotMatch(xml, /flowchart TD|sequenceDiagram/);
   for (const match of xml.matchAll(/<wp:extent cx="(\d+)" cy="(\d+)"/g)) {
-    assert.ok(Number(match[1]) <= 560 * 9525);
+    assert.ok(Number(match[1]) <= 605 * 9525); // A4 portrait column with 25 mm margins.
     assert.ok(Number(match[2]) <= 741 * 9525);
   }
 });
@@ -94,21 +94,23 @@ test('reflow and readability diagnostics use final section dimensions and margin
     ['<!-- word:document {"margins":{"top":50,"bottom":50}} -->\n\n', 16, false],
   ]) {
     const result = await convert(parseMarkdown(prefix + fence(chain(count)), defaults), [], [], defaults);
-    assert.deepEqual(result.warnings.map(w => w.code), [adjusted ? 'MERMAID_LAYOUT_ADJUSTED' : 'MERMAID_SMALL_TEXT']);
+    assert.deepEqual(result.warnings.map(w => w.code), adjusted ? ['MERMAID_LAYOUT_ADJUSTED'] : ['MERMAID_TEXT_ENLARGED', 'MERMAID_SMALL_TEXT']);
     const zip = await JSZip.loadAsync(result.data);
     const xml = await zip.file('word/document.xml').async('string');
     const extent = xml.match(/<wp:extent cx="(\d+)" cy="(\d+)"/);
     const media = Object.values(zip.files).find(f => !f.dir && f.name.startsWith('word/media/'));
     const meta = await sharp(await media.async('nodebuffer')).metadata();
-    // These nodes use 13 px text in the source SVG; PNG is rendered at 2x.
-    const actualPt = 13 * 0.75 * (Number(extent[1]) / 9525) / (meta.width / 2);
+    // These nodes use 13 px text, times any enlargement, in the source SVG; PNG is rendered at 2x.
+    const scale = Number(result.warnings[0].message.match(/放大为 ([\d.]+) 倍/)?.[1] ?? 1);
+    assert.equal(scale, adjusted ? 1 : 1.5);
+    const actualPt = 13 * scale * 0.75 * (Number(extent[1]) / 9525) / (meta.width / 2);
     assert.equal(actualPt >= 8, adjusted);
-    const reportedPt = Number(result.warnings[0].message.match(/约 ([\d.]+) pt/)[1]);
+    const reportedPt = Number(result.warnings.at(-1).message.match(/约 ([\d.]+) pt/)[1]);
     assert.ok(Math.abs(reportedPt - actualPt) < 0.06, `${reportedPt} vs ${actualPt}`);
   }
   const result = await convert(parseMarkdown('<!-- word:section landscape -->\n\n' + fence(chain(13)) +
     '\n\n<!-- word:section portrait -->\n\n' + fence(chain(13)), defaults), [], [], defaults);
-  assert.deepEqual(result.warnings.map(w => w.code), ['MERMAID_SMALL_TEXT', 'MERMAID_LAYOUT_ADJUSTED']);
+  assert.deepEqual(result.warnings.map(w => w.code), ['MERMAID_TEXT_ENLARGED', 'MERMAID_SMALL_TEXT', 'MERMAID_LAYOUT_ADJUSTED']);
 });
 
 test('an oversized vertical PNG falls back to the original graph within the byte budget', async () => {
@@ -116,7 +118,8 @@ test('an oversized vertical PNG falls back to the original graph within the byte
   let checked = false;
   for (let count = 10; count <= 16; count++) {
     const source = 'graph LR\n' + Array.from({ length: count }, (_, i) => `N${i}[处理步骤${i}]`).join('-->');
-    const original = await renderDiagram(source, defaults, { maxWidth: 560, maxHeight: 1 });
+    // Unbounded placement keeps natural size, so neither reflow nor enlargement applies.
+    const original = await renderDiagram(source, defaults, { maxWidth: 1e5, maxHeight: 1e5 });
     const vertical = await renderDiagram(source, defaults);
     if (!vertical.layoutAdjusted || vertical.data.length <= original.data.length) continue;
     const result = await renderDiagram(source, { ...defaults, maxImageBytes: original.data.length });
@@ -215,7 +218,8 @@ test('small-text warnings identify the fence and do not block strict delivery', 
   try {
     const r = await h.call({ ...source('# 宽图\n\n' + fence(diagram)), strict: true });
     assert.equal(r.isError, false, JSON.stringify(r));
-    assert.equal(r.value.warnings[0].code, 'MERMAID_SMALL_TEXT');
+    // Sequence layouts keep fixed box heights, so text is never enlarged for them.
+    assert.deepEqual(r.value.warnings.map(w => w.code), ['MERMAID_SMALL_TEXT']);
     assert.equal(r.value.warnings[0].severity, 'info');
     assert.equal(r.value.warnings[0].line, 3);
     assert.match(r.value.warnings[0].message, /pt/);
@@ -428,7 +432,29 @@ test('one layout pass sizes each diagram for its placement and keeps unsupported
   assert.match(xml, /&quot;甲&quot; : 1|"甲" : 1/);
   const extents = [...xml.matchAll(/<wp:extent cx="(\d+)"/g)].map(m => Number(m[1]) / 9525);
   assert.equal(extents.length, 2);
-  // Root width is capped at 560 px; three list levels leave 604.8 - 144 = 460.8 px.
-  assert.ok(Math.abs(extents[0] - 560) < 1, String(extents[0]));
+  // Root width fills the 604.8 px column; three list levels leave 604.8 - 144 = 460.8 px.
+  assert.ok(Math.abs(extents[0] - 604.8) < 1, String(extents[0]));
   assert.ok(extents[1] <= 460.8 + 1 && extents[1] < extents[0], String(extents[1]));
+});
+
+test('small placements enlarge diagram text before layout and landscape uses its full column', async () => {
+  const wide = 'graph TD\n' + Array.from({ length: 9 }, (_, i) => `A[根节点] --> B${i}[分支节点${i}]`).join('\n');
+  const natural = await renderDiagram(wide, defaults, { maxWidth: 1e5, maxHeight: 1e5 });
+  assert.equal(natural.fontScale, 1);
+  const portrait = await renderDiagram(wide, defaults);
+  assert.ok(portrait.fontScale > 1 && portrait.fontScale <= 1.5, String(portrait.fontScale));
+  // The enlarged layout must actually read larger than the natural one scaled into the same column.
+  const naturalPt = natural.minTextPt * Math.min(1, 604.8 / natural.displayWidth);
+  assert.ok(portrait.minTextPt > naturalPt, `${portrait.minTextPt} vs ${naturalPt}`);
+  const svg = new JSDOM(renderMermaidSVG(wide), { contentType: 'image/svg+xml' });
+  try { assert.equal(svg.window.document.querySelector('.node text').getAttribute('font-size'), '13'); } finally { svg.window.close(); }
+  const result = await convert(parseMarkdown('<!-- word:section landscape -->\n\n' + fence(wide), defaults), [], [], defaults);
+  const xml = await (await JSZip.loadAsync(result.data)).file('word/document.xml').async('string');
+  const width = Number(xml.match(/<wp:extent cx="(\d+)"/)[1]) / 9525;
+  assert.ok(width > 605, String(width));
+  // Fixed 40 px actor boxes cannot hold enlarged two-line labels.
+  const sequence = 'sequenceDiagram\n' + Array.from({ length: 8 }, (_, i) => `participant P${i} as 服务<br>节点${i}`).join('\n') + '\nP0->>P7: 完成';
+  const kept = await renderDiagram(sequence, defaults);
+  assert.ok(kept.minTextPt < 8);
+  assert.equal(kept.fontScale, 1);
 });

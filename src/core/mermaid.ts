@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import type { Limits } from '../config.js';
 import type { EmbeddedImage, ImageBounds } from './html-to-docx.js';
 import { ExportError } from '../runtime/errors.js';
-import { MAX_IMAGE_HEIGHT } from './styles.js';
+import { CONTENT_WIDTH, MAX_IMAGE_HEIGHT } from './styles.js';
 
 // All fonts are resolved locally. No web fonts or browser runtime are used.
 export const DIAGRAM_FONT = 'PingFang SC, Microsoft YaHei, Noto Sans CJK SC, WenQuanYi Micro Hei, sans-serif';
@@ -61,19 +61,24 @@ export function staticDiagramSvg(svg: string): string {
   } finally { dom.window.close(); }
 }
 
-export interface RenderedDiagram extends EmbeddedImage { minTextPt: number; layoutAdjusted?: boolean; styleNotes?: string[] }
+export interface RenderedDiagram extends EmbeddedImage { minTextPt: number; layoutAdjusted?: boolean; fontScale?: number; styleNotes?: string[] }
 
-interface DrawnDiagram { input: Buffer; width: number; height: number; minFontSize: number }
+// Readability threshold for placed labels; enlargement aims above it, within a bounded scale.
+export const MIN_DIAGRAM_TEXT_PT = 8;
+const TARGET_TEXT_PT = 9;
+export const MAX_DIAGRAM_FONT_SCALE = 1.5;
+
+interface DrawnDiagram { input: Buffer; width: number; height: number; minFontSize: number; text: string; compact: boolean; fontScale: number }
 /** Parsed and drawn at its natural size; independent of where the diagram is placed. */
 export interface PreparedDiagram { source: string; options: RenderOptions; notes: string[]; base: DrawnDiagram }
 
-async function draw(prepared: Pick<PreparedDiagram, 'options'>, text: string, limits: Limits, compact = false): Promise<DrawnDiagram> {
-  const { renderMermaidSVG } = await import('./mermaid-renderer.js');
-  const svg = staticDiagramSvg(renderMermaidSVG(text, {
+async function draw(prepared: Pick<PreparedDiagram, 'options'>, text: string, limits: Limits, compact = false, fontScale = 1): Promise<DrawnDiagram> {
+  const { renderMermaidSVG, withDiagramFontScale } = await import('./mermaid-renderer.js');
+  const svg = staticDiagramSvg(withDiagramFontScale(fontScale, () => renderMermaidSVG(text, {
     font: 'sans-serif', bg: palette['--bg'], fg: palette['--fg'], line: palette['--line'],
     accent: palette['--accent'], muted: palette['--muted'], surface: palette['--surface'], border: palette['--border'],
     ...prepared.options, padding: compact ? 8 : 24, ...(compact ? { nodeSpacing: 12, layerSpacing: 16 } : {}), interactive: false,
-  }));
+  })));
   if (!/<text\b/.test(svg)) throw new Error('Empty diagram');
   if (Buffer.byteLength(svg) > limits.maxImageBytes) throw new ExportError('Mermaid SVG exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
   const input = Buffer.from(svg);
@@ -84,12 +89,12 @@ async function draw(prepared: Pick<PreparedDiagram, 'options'>, text: string, li
   const dom = new JSDOM(svg, { contentType: 'image/svg+xml' });
   try {
     const sizes = Array.from(dom.window.document.querySelectorAll('text[font-size]')).map(el => Number(el.getAttribute('font-size'))).filter(size => size > 0);
-    return { input, width, height, minFontSize: sizes.length ? Math.min(...sizes) : 0 };
+    return { input, width, height, minFontSize: sizes.length ? Math.min(...sizes) : 0, text, compact, fontScale };
   } finally { dom.window.close(); }
 }
 
 function fit(drawn: DrawnDiagram, bounds: ImageBounds): { displayWidth: number; minTextPt: number } {
-  const displayWidth = Math.min(drawn.width / 2, 560, bounds.maxWidth, Math.min(MAX_IMAGE_HEIGHT, bounds.maxHeight) * drawn.width / drawn.height);
+  const displayWidth = Math.min(drawn.width / 2, bounds.maxWidth, Math.min(MAX_IMAGE_HEIGHT, bounds.maxHeight) * drawn.width / drawn.height);
   return { displayWidth, minTextPt: drawn.minFontSize * (displayWidth / (drawn.width / 2)) * 0.75 };
 }
 
@@ -104,7 +109,7 @@ export async function prepareDiagramImage(source: string, limits: Limits): Promi
 }
 
 /** Choose the layout for the final placement bounds and rasterize it. */
-export async function finishDiagram(prepared: PreparedDiagram, limits: Limits, bounds: ImageBounds = { maxWidth: 560, maxHeight: MAX_IMAGE_HEIGHT }): Promise<RenderedDiagram> {
+export async function finishDiagram(prepared: PreparedDiagram, limits: Limits, bounds: ImageBounds = { maxWidth: CONTENT_WIDTH / 15, maxHeight: MAX_IMAGE_HEIGHT }): Promise<RenderedDiagram> {
   const rasterize = async (image: DrawnDiagram): Promise<Buffer> => {
     const data = await sharp(image.input, { density: 144, limitInputPixels: limits.maxImagePixels }).flatten({ background: '#ffffff' }).png().toBuffer();
     if (data.byteLength > limits.maxImageBytes) throw new ExportError('Mermaid PNG exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
@@ -113,13 +118,14 @@ export async function finishDiagram(prepared: PreparedDiagram, limits: Limits, b
   let selected = { ...prepared.base, ...fit(prepared.base, bounds) };
   let data: Buffer | undefined;
   let layoutAdjusted = false;
+  const small = (image: { minTextPt: number }): boolean => image.minTextPt > 0 && image.minTextPt < MIN_DIAGRAM_TEXT_PT;
   // LR/RL topology is unchanged by a TB layout. Reflow only when it clears
   // the readability threshold; otherwise retain the author's direction.
-  if (selected.minTextPt > 0 && selected.minTextPt < 8 && /^(?:flowchart|graph)\s+(?:LR|RL)\b/i.test(prepared.source)) {
+  if (small(selected) && /^(?:flowchart|graph)\s+(?:LR|RL)\b/i.test(prepared.source)) {
     try {
       const drawn = await draw(prepared, prepared.source.replace(/^((?:flowchart|graph)\s+)(?:LR|RL)\b/i, '$1TB'), limits, true);
       const vertical = { ...drawn, ...fit(drawn, bounds) };
-      if (vertical.minTextPt >= 8) {
+      if (vertical.minTextPt >= MIN_DIAGRAM_TEXT_PT) {
         data = await rasterize(vertical);
         selected = vertical;
         layoutAdjusted = true;
@@ -128,8 +134,25 @@ export async function finishDiagram(prepared: PreparedDiagram, limits: Limits, b
       // A fallback layout failure must not discard the already rendered source graph.
     }
   }
+  // Enlarge labels before layout so the scaled-down image keeps readable text.
+  // Only flowchart and state layouts size their boxes from the scaled label metrics;
+  // sequence actor and row heights are fixed, so enlarged labels would overflow.
+  // Spacing stays fixed, so the image grows less than the text; two passes converge.
+  for (let pass = 0; pass < 2 && small(selected) && /^(?:(?:flowchart|graph)\s|stateDiagram)/i.test(selected.text); pass++) {
+    const scale = Math.min(MAX_DIAGRAM_FONT_SCALE, selected.fontScale * TARGET_TEXT_PT / selected.minTextPt);
+    if (scale <= selected.fontScale * 1.01) break;
+    try {
+      const drawn = await draw(prepared, selected.text, limits, selected.compact, scale);
+      const larger = { ...drawn, ...fit(drawn, bounds) };
+      if (larger.minTextPt <= selected.minTextPt) break;
+      data = await rasterize(larger);
+      selected = larger;
+    } catch {
+      break; // Keep the last successfully rendered layout.
+    }
+  }
   data ??= await rasterize(selected);
-  return { data, type: 'png', width: selected.width, height: selected.height, displayWidth: selected.displayWidth, minTextPt: selected.minTextPt, layoutAdjusted, styleNotes: prepared.notes };
+  return { data, type: 'png', width: selected.width, height: selected.height, displayWidth: selected.displayWidth, minTextPt: selected.minTextPt, layoutAdjusted, fontScale: selected.fontScale, styleNotes: prepared.notes };
 }
 
 export async function renderDiagram(source: string, limits: Limits, bounds?: ImageBounds): Promise<RenderedDiagram> {

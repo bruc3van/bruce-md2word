@@ -13,7 +13,7 @@ type Block = Paragraph | Table;
 // All horizontal layout is computed in twips; ImageRun uses 96-DPI pixels.
 interface Layout { left: number; right: number; quote: boolean }
 const rootLayout: Layout = { left: 0, right: 0, quote: false };
-/** Fit an image to its placement: natural size, capped by width, height and the 560 px column. */
+/** Fit an image to its placement: natural size, capped by the available column width and height. */
 export function createImageRun(image: EmbeddedImage, bounds: ImageBounds, alt: string): ImageRun {
   const width = Math.min(image.displayWidth ?? image.width, bounds.maxWidth, bounds.maxHeight * image.width / image.height);
   return new ImageRun({ type: image.type, data: image.data, transformation: { width, height: Math.round(width * image.height / image.width) }, altText: { title: alt, description: alt, name: 'Image' } });
@@ -143,7 +143,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       if (tag === 'IMG') {
         const maxHeight = Math.min(MAX_IMAGE_HEIGHT, ((landscape ? PAGE_WIDTH : PAGE_HEIGHT) - mmToTwips(options.margins.top) - mmToTwips(options.margins.bottom)) / 15 - 80);
         const src = el.getAttribute('src') ?? '';
-        const bounds = { maxWidth: Math.min(560, maxWidth), maxHeight };
+        const bounds = { maxWidth, maxHeight };
         const image = images.get(src);
         const lazy = lazyImages.get(src);
         if (image) runs.push(createImageRun(image, bounds, el.getAttribute('alt') ?? ''));

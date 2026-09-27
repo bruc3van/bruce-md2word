@@ -1,7 +1,7 @@
 import { Document, Packer, TextRun, Paragraph, Header, Footer, PageNumber, TableOfContents, AlignmentType, SectionType, PageOrientation, XmlComponent } from 'docx';
 import type { ParagraphChild, ISectionOptions, FileChild, IContext, IXmlableObject } from 'docx';
 import { latexToWordMath } from './math.js';
-import { prepareDiagramImage, finishDiagram } from './mermaid.js';
+import { prepareDiagramImage, finishDiagram, MIN_DIAGRAM_TEXT_PT } from './mermaid.js';
 import type { PreparedDiagram } from './mermaid.js';
 import sharp from 'sharp';
 import bmp from 'bmp-js';
@@ -88,7 +88,8 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
       if (normalizedBytes > limits.maxTotalImageBytes) throw new ExportError('Images and diagrams exceed the aggregate byte limit.', 'LIMIT_EXCEEDED');
       for (const note of image.styleNotes ?? []) parsed.diagnostics.add('MERMAID_STYLE_UNSUPPORTED', note, 'info', line);
       if (image.layoutAdjusted) parsed.diagnostics.add('MERMAID_LAYOUT_ADJUSTED', `横向流程图在 Word 中过窄，已改为纵向布局以保留节点与连线；调整后最小字号约 ${image.minTextPt.toFixed(1)} pt。`, 'info', line);
-      if (image.minTextPt > 0 && image.minTextPt < 8) parsed.diagnostics.add('MERMAID_SMALL_TEXT', `图表缩放后最小字号约 ${image.minTextPt.toFixed(1)} pt，低于建议的 8 pt；请拆分图表、简化标签或调整布局。`, 'info', line);
+      if (image.fontScale && image.fontScale > 1) parsed.diagnostics.add('MERMAID_TEXT_ENLARGED', `图表缩放后文字过小，已将图内文字放大为 ${image.fontScale.toFixed(2)} 倍后重新排布；最小字号约 ${image.minTextPt.toFixed(1)} pt。`, 'info', line);
+      if (image.minTextPt > 0 && image.minTextPt < MIN_DIAGRAM_TEXT_PT) parsed.diagnostics.add('MERMAID_SMALL_TEXT', `图表缩放后最小字号约 ${image.minTextPt.toFixed(1)} pt，低于建议的 ${MIN_DIAGRAM_TEXT_PT} pt；请拆分图表、简化标签或调整布局。`, 'info', line);
       placement.run.target = createImageRun(image, placement.bounds, placement.alt);
     } catch (error) {
       if (error instanceof ExportError) throw error;

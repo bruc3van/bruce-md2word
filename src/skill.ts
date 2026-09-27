@@ -22,7 +22,7 @@ Call word_export; no setup command, CLI install or external converter is require
 ## Capabilities and limits
 
 - PNG/JPEG/GIF/BMP images embed (animated images keep only the first frame: IMAGE_FIRST_FRAME). Remote images are never fetched and input SVG is unsupported.
-- Mermaid flowchart, state, sequence, class, ER and XY diagrams render locally as PNG with a lightweight renderer, not full Mermaid compatibility. Unsupported diagrams retain source with MERMAID_NOT_RENDERED. MERMAID_LAYOUT_ADJUSTED (a too-wide flowchart was reflowed vertically), MERMAID_SMALL_TEXT (recommend splitting or simplifying) and MERMAID_STYLE_UNSUPPORTED (some flowchart styling not applied) are informational. Chinese labels use local fonts.
+- Mermaid flowchart, state, sequence, class, ER and XY diagrams render locally as PNG with a lightweight renderer, not full Mermaid compatibility. Unsupported diagrams retain source with MERMAID_NOT_RENDERED. MERMAID_LAYOUT_ADJUSTED (a too-wide flowchart was reflowed vertically), MERMAID_TEXT_ENLARGED (diagram text was enlarged up to 1.5x before layout), MERMAID_SMALL_TEXT (recommend splitting or simplifying) and MERMAID_STYLE_UNSUPPORTED (some flowchart styling not applied) are informational. Chinese labels use local fonts.
 - LaTeX inline and display formulas become editable Word equations. MATH_NOT_CONVERTED keeps the full source and is a degradation. Custom macros and equation numbering/references are unsupported.
 - Named footnotes become native Word footnotes. At most 1000 formulas and 1000 footnote definitions per export; beyond that the export fails with LIMIT_EXCEEDED, so split long documents.
 - Custom Word templates and editing existing DOCX files are not supported.

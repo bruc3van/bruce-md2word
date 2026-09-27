@@ -126,7 +126,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.6.3
+npm install -g bruce-md2word@0.6.4
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -139,12 +139,12 @@ npm install -g bruce-md2word@0.6.3
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.6.3 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.6.4 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.6.3
+npm install -g bruce-md2word@0.6.4
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -169,13 +169,13 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 当前包要求 Node.js `^24 || ^26`、DSH 服务包 `0.1.7-rc.2`、Cordis `~4.0.4`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.6.3
+dsh plugin --profile web add bruce-md2word@0.6.4
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.6.3
+npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.6.4
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
@@ -216,7 +216,7 @@ DSH 的 `word_export` 一次调用接收一个 Markdown 文件或一段正文，
 
 - `strict: true` 遇到缺失图片、不支持的图表等内容降级时拒绝保存；默认值为 `false`。
 - 普通模式允许保留替代文字或图表源码，并返回降级警告，适合排查问题。
-- `MERMAID_LAYOUT_ADJUSTED` 表示过宽的横向流程图已保留节点和连线、自动转为更易读的纵向布局；`MERMAID_SMALL_TEXT` 表示最终图中文字仍可能过小。两者都是可读性提示，严格模式仍可成功；Agent 应继续检查图表。
+- `MERMAID_LAYOUT_ADJUSTED` 表示过宽的横向流程图已保留节点和连线、自动转为更易读的纵向布局；`MERMAID_TEXT_ENLARGED` 表示流程图或状态图缩放后文字过小，已放大图内字号（最多 1.5 倍）后重新排布；`MERMAID_SMALL_TEXT` 表示最终图中文字仍可能过小。三者都是可读性提示，严格模式仍可成功；Agent 应继续检查图表。
 - 成功返回文件路径、实际文件名、大小、MIME 类型及 `warnings`。路径来自本地运行环境，不是下载链接。
 
 严格模式通过表示未检测到内容降级，不代表文档事实正确或 Word 排版已验收。完整参数、诊断处理、附件模式与配置见 [Agent 接口与运行参考](docs/agent-reference.md)。

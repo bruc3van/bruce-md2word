@@ -36,6 +36,7 @@ bruce-md2word "docs/报告.md" -o "output/项目报告-诊断.docx"
 | `FOOTNOTE_TABLE_FLATTENED` | 降级 | 脚注中的表格已改为逐段排列。需要表格时移到正文。 |
 | `FOOTNOTE_UNUSED` | 信息 | 未被引用的脚注定义保留在正文，确认是否遗漏引用。 |
 | `MERMAID_SMALL_TEXT` | 信息 | 检查图表，简化标签或拆分后再导出，需要时检查实际版面。 |
+| `MERMAID_TEXT_ENLARGED` | 信息 | 流程图或状态图缩放后文字过小，已放大图内字号（最多 1.5 倍）后重新排布；检查最终页面。仍过小时同时返回 `MERMAID_SMALL_TEXT`。 |
 | `MERMAID_LAYOUT_ADJUSTED` | 信息 | 横向流程图在 Word 中会太小，已改为纵向排布；节点与连线保留。检查最终页面，确认调整后的阅读顺序符合用途。 |
 | `MERMAID_STYLE_UNSUPPORTED` | 信息 | 图表已生成，但部分主题变量、样式属性或字号/虚线值未应用；检查图表样式。 |
 | `DIAGNOSTICS_TRUNCATED` | 随被截断项 | 警告已截断，不能声称已列出全部问题。先修正已知问题，再导出获取后续诊断。 |

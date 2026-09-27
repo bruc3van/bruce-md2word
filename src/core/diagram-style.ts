@@ -1,6 +1,19 @@
+// Only the bundled renderer's copy of this module is read while drawing.
+let fontScale = 1;
+/** Uniform text scale for the pinned renderer; spacing and padding are unchanged. */
+export function diagramFontScale(): number {
+  return fontScale;
+}
+/** Scope a scale to one synchronous render. */
+export function withDiagramFontScale<T>(scale: number, render: () => T): T {
+  const previous = fontScale;
+  fontScale = scale;
+  try { return render(); } finally { fontScale = previous; }
+}
+
 /** Shared by the pinned renderer's layout and SVG stages. Values are pixels. */
 export function diagramFontSize(style?: Record<string, string>): number {
-  return parseDiagramFontSize(style?.['font-size']) ?? 13;
+  return (parseDiagramFontSize(style?.['font-size']) ?? 13) * fontScale;
 }
 
 export function parseDiagramFontSize(value: string | undefined): number | undefined {

@@ -76,7 +76,7 @@ const adaptRenderer = {
       return { contents, loader: 'ts', resolveDir: path.dirname(file) };
     });
     plugin.onLoad({ filter: /beautiful-mermaid[/\\]src[/\\](?:styles|index)\.ts$/ }, ({ path: file }) => {
-      let contents = readFileSync(file, 'utf8');
+      let contents = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
       const before = path.basename(file) === 'styles.ts'
         ? 'return text.length * fontSize * 0.6'
         : 'const graph = parseMermaid(text)';
@@ -85,6 +85,12 @@ const adaptRenderer = {
         : 'const graph = wrapGraphLabels(parseMermaid(text))';
       if (contents.split(before).length !== 2) throw new Error(`Mermaid patch target changed: ${file}`);
       contents = contents.replace(before, after);
+      if (path.basename(file) === 'styles.ts') {
+        // Label sizes follow the caller's scale so small placements can enlarge text before layout.
+        contents = replaceOnce(contents, '  nodeLabel: 13,\n  /** Edge label text */\n  edgeLabel: 11,\n  /** Subgraph header text */\n  groupHeader: 12,\n} as const',
+          '  get nodeLabel() { return 13 * diagramFontScale() },\n  get edgeLabel() { return 11 * diagramFontScale() },\n  get groupHeader() { return 12 * diagramFontScale() },\n}', file);
+        contents = `import { diagramFontScale } from ${JSON.stringify(path.resolve('src/core/diagram-style.ts'))};\n` + contents;
+      }
       if (path.basename(file) === 'index.ts') contents = `import { wrapGraphLabels } from ${JSON.stringify(path.resolve('src/core/diagram-layout.ts'))};\n` + contents;
       return { contents, loader: 'ts', resolveDir: path.dirname(file) };
     });
