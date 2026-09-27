@@ -414,3 +414,21 @@ test('unsupported style values keep diagrams and warn without rejecting strict e
     }
   } finally { await h.close(); }
 });
+
+test('one layout pass sizes each diagram for its placement and keeps unsupported sources', async () => {
+  const wide = 'graph TD\n' + Array.from({ length: 12 }, (_, i) => `A[根节点] --> B${i}[分支节点${i}]`).join('\n');
+  const nested = '- 一级\n  - 二级\n    - 三级\n\n      ' + fence(wide).split('\n').join('\n      ');
+  const markdown = [fence('pie\n"甲" : 1'), fence(wide), nested].join('\n\n');
+  const result = await convert(parseMarkdown(markdown, defaults), [], [], defaults);
+  assert.deepEqual(result.warnings.filter(w => w.severity === 'degradation').map(w => [w.code, w.line]), [['MERMAID_NOT_RENDERED', 1]]);
+  await validateArtifact(result.data, defaults.maxOutputBytes);
+  const zip = await JSZip.loadAsync(result.data);
+  const xml = await zip.file('word/document.xml').async('string');
+  assert.match(xml, /Mermaid 图表未渲染（源文件第 1 行）/);
+  assert.match(xml, /&quot;甲&quot; : 1|"甲" : 1/);
+  const extents = [...xml.matchAll(/<wp:extent cx="(\d+)"/g)].map(m => Number(m[1]) / 9525);
+  assert.equal(extents.length, 2);
+  // Root width is capped at 560 px; three list levels leave 604.8 - 144 = 460.8 px.
+  assert.ok(Math.abs(extents[0] - 560) < 1, String(extents[0]));
+  assert.ok(extents[1] <= 460.8 + 1 && extents[1] < extents[0], String(extents[1]));
+});

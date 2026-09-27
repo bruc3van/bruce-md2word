@@ -4,9 +4,10 @@ export function textColumns(text: string): number {
 }
 export function columnWidths(rows: Element[], count: number, total: number, ratios?: number[]): number[] {
   const weights = ratios ?? Array.from({ length: count }, (_, i) => {
-    const lengths = rows.map(row => textColumns(row.children[i]?.textContent ?? ''));
+    // reduce, not spread: very long tables exceed the engine's argument limit.
+    const longest = rows.reduce((max, row) => Math.max(max, textColumns(row.children[i]?.textContent ?? '')), 1);
     // Bound long prose's share while leaving compact identifier columns useful.
-    return Math.max(6, Math.min(40, Math.sqrt(Math.max(1, ...lengths)) * 3));
+    return Math.max(6, Math.min(40, Math.sqrt(longest) * 3));
   });
   const sum = weights.reduce((a, b) => a + b, 0);
   const floor = ratios ? 0 : Math.min(900, Math.floor(total / count / 2));

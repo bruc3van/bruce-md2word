@@ -13,8 +13,15 @@ type Block = Paragraph | Table;
 // All horizontal layout is computed in twips; ImageRun uses 96-DPI pixels.
 interface Layout { left: number; right: number; quote: boolean }
 const rootLayout: Layout = { left: 0, right: 0, quote: false };
+/** Fit an image to its placement: natural size, capped by width, height and the 560 px column. */
+export function createImageRun(image: EmbeddedImage, bounds: ImageBounds, alt: string): ImageRun {
+  const width = Math.min(image.displayWidth ?? image.width, bounds.maxWidth, bounds.maxHeight * image.width / image.height);
+  return new ImageRun({ type: image.type, data: image.data, transformation: { width, height: Math.round(width * image.height / image.width) }, altText: { title: alt, description: alt, name: 'Image' } });
+}
+/** Images whose content depends on their placement bounds; each factory runs once per placement. */
+export type LazyImages = Map<string, (bounds: ImageBounds, alt: string) => ParagraphChild>;
 const headingSlug = (text: string): string => text.toLowerCase().trim().replace(/[^\p{L}\p{N}\p{M}_\-\s]/gu, '').replace(/\s/g, '-');
-export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImage>, diagnostics: Diagnostics, formulas = new Map<string, ParagraphChild[]>(), onImageBounds?: (id: string, bounds: ImageBounds) => void): { children: Block[]; sections: { landscape: boolean; children: Block[] }[]; options: DocumentOptions; numbering: INumberingOptions; footnotes: Record<string, { children: Paragraph[] }> } {
+export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImage>, diagnostics: Diagnostics, formulas = new Map<string, ParagraphChild[]>(), lazyImages: LazyImages = new Map()): { children: Block[]; sections: { landscape: boolean; children: Block[] }[]; options: DocumentOptions; numbering: INumberingOptions; footnotes: Record<string, { children: Paragraph[] }> } {
   const dom = new JSDOM(`<body>${html}</body>`);
   let options = documentDefaults();
   let landscape = false;
@@ -95,7 +102,8 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     const pieces = text.split(/(\p{Emoji_Presentation}|\p{Extended_Pictographic}(?:\u{FE0F}|\u{200D}\p{Extended_Pictographic})*)/gu);
     return pieces.filter(Boolean).map(text => new TextRun({ ...(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/u.test(text) ? { font: 'Segoe UI Emoji' } : {}), ...style, text }));
   }
-  function inline(nodes: Iterable<Node>, style: IRunOptions = {}, maxWidth = contentWidth() / 15): ParagraphChild[] {
+  // Inline code is 11 pt in body text; codeSize 0 inherits the paragraph size (headings).
+  function inline(nodes: Iterable<Node>, style: IRunOptions = {}, maxWidth = contentWidth() / 15, codeSize = 22): ParagraphChild[] {
     const runs: ParagraphChild[] = [];
     for (const node of nodes) {
       if (node.nodeType === 3) {
@@ -134,17 +142,18 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       }
       if (tag === 'IMG') {
         const maxHeight = Math.min(MAX_IMAGE_HEIGHT, ((landscape ? PAGE_WIDTH : PAGE_HEIGHT) - mmToTwips(options.margins.top) - mmToTwips(options.margins.bottom)) / 15 - 80);
-        onImageBounds?.(el.getAttribute('src') ?? '', { maxWidth: Math.min(560, maxWidth), maxHeight });
-        const image = images.get(el.getAttribute('src') ?? '');
-        if (image) {
-          const width = Math.min(image.displayWidth ?? image.width, 560, maxWidth, maxHeight * image.width / image.height);
-          runs.push(new ImageRun({ type: image.type, data: image.data, transformation: { width, height: Math.round(width * image.height / image.width) }, altText: { title: el.getAttribute('alt') ?? '', description: el.getAttribute('alt') ?? '', name: 'Image' } }));
-        } else runs.push(new TextRun({ ...style, text: `[图片: ${el.getAttribute('alt') || '图片'}]`, italics: true, color: '6B7280' }));
+        const src = el.getAttribute('src') ?? '';
+        const bounds = { maxWidth: Math.min(560, maxWidth), maxHeight };
+        const image = images.get(src);
+        const lazy = lazyImages.get(src);
+        if (image) runs.push(createImageRun(image, bounds, el.getAttribute('alt') ?? ''));
+        else if (lazy) runs.push(lazy(bounds, el.getAttribute('alt') ?? ''));
+        else runs.push(new TextRun({ ...style, text: `[图片: ${el.getAttribute('alt') || '图片'}]`, italics: true, color: '6B7280' }));
       } else if (tag === 'BR') runs.push(new TextRun({ text: '', break: 1 }));
-      else if (tag === 'CODE') runs.push(...textRuns(el.textContent ?? '', { ...style, font: 'Consolas', size: 22, color: 'DC2626' }));
+      else if (tag === 'CODE') runs.push(...textRuns(el.textContent ?? '', { ...style, font: 'Consolas', color: 'DC2626', ...(style.size || codeSize ? { size: style.size || codeSize } : {}) }));
       else if (tag === 'A') {
         const href = el.getAttribute('href') ?? '';
-        const children = inline(el.childNodes, { ...style, color: '2563EB', underline: {} }, maxWidth);
+        const children = inline(el.childNodes, { ...style, color: '2563EB', underline: {} }, maxWidth, codeSize);
         if (href.startsWith('#ref:')) {
           const target = captions.get(href.slice(5));
           if (target) {
@@ -162,7 +171,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
           }
         } else if (href) runs.push(new ExternalHyperlink({ link: href, children }));
         else runs.push(...children);
-      } else runs.push(...inline(el.childNodes, { ...style, ...(['STRONG', 'B'].includes(tag) ? { bold: true } : {}), ...(['EM', 'I'].includes(tag) ? { italics: true } : {}), ...(['DEL', 'S'].includes(tag) ? { strike: true } : {}) }, maxWidth));
+      } else runs.push(...inline(el.childNodes, { ...style, ...(['STRONG', 'B'].includes(tag) ? { bold: true } : {}), ...(['EM', 'I'].includes(tag) ? { italics: true } : {}), ...(['DEL', 'S'].includes(tag) ? { strike: true } : {}) }, maxWidth, codeSize));
     }
     return runs;
   }
@@ -230,7 +239,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     if (/^H[1-6]$/.test(tag) && el.parentElement === dom.window.document.body && sectionLevel && Number(tag[1]) <= sectionLevel) { section++; autoList = undefined; }
     const width = availablePixels(layout);
     const indent = { left: layout.left, right: layout.right, firstLine: 0 };
-    if (/^H[1-6]$/.test(tag)) return [new Paragraph({ children: [new Bookmark({ id: bookmarks.get(el)!, children: inline(el.childNodes, {}, width) })], ...(options.headingNumbering && el.parentElement === dom.window.document.body ? { numbering: { reference: 'document-headings', level: Number(tag[1]) - 1 } } : {}), indent, keepNext: true, keepLines: true, heading: HeadingLevel[`HEADING_${tag[1]}` as keyof typeof HeadingLevel] })];
+    if (/^H[1-6]$/.test(tag)) return [new Paragraph({ children: [new Bookmark({ id: bookmarks.get(el)!, children: inline(el.childNodes, {}, width, 0) })], ...(options.headingNumbering && el.parentElement === dom.window.document.body ? { numbering: { reference: 'document-headings', level: Number(tag[1]) - 1 } } : {}), indent, keepNext: true, keepLines: true, heading: HeadingLevel[`HEADING_${tag[1]}` as keyof typeof HeadingLevel] })];
     if (tag === 'P' && el.hasAttribute('data-math-block')) return [new Paragraph({ children: inline(el.childNodes, {}, width), alignment: AlignmentType.CENTER, indent, spacing: { before: 160, after: 160 } })];
     if (tag === 'P' && el.hasAttribute('data-mermaid-notice')) return [new Paragraph({ children: [new TextRun({ text: el.textContent ?? '', color: '92400E', size: 20 })], indent, spacing: { before: 160, after: 80 }, keepNext: true })];
     if (tag === 'P') {
@@ -261,7 +270,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     if (tag === 'UL' || tag === 'OL') return list(el, level, layout);
     if (tag === 'TABLE') {
       const trs = Array.from(el.querySelectorAll('tr'));
-      const count = Math.max(1, ...trs.map(tr => tr.children.length));
+      const count = trs.reduce((max, tr) => Math.max(max, tr.children.length), 1);
       const tableWidth = Math.max(1, contentWidth() - layout.left - layout.right);
       const ratios = el.hasAttribute('data-widths') ? JSON.parse(el.getAttribute('data-widths')!) as number[] : undefined;
       let widths = columnWidths(trs, count, tableWidth, ratios);
@@ -276,7 +285,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
         return new TableRow({ cantSplit: Array.from(tr.children).every((cell, i) => !cell.querySelector('img,[data-math]') && estimatedLines(cell.textContent ?? '', (widths[i] - 300) * 12 / options.fontSize) <= 8), tableHeader: header || undefined, children: Array.from(tr.children).map((cell, i) => new TableCell({ width: { size: widths[i], type: WidthType.DXA }, ...(header ? { shading: { fill: 'E5E7EB' } } : {}), verticalAlign: VerticalAlign.CENTER, margins: { top: header ? 120 : 100, bottom: header ? 120 : 100, left: 150, right: 150 }, children: [new Paragraph({ keepNext: el.hasAttribute('data-keep-next') && tr === trs[trs.length - 1], indent: { firstLine: 0 }, alignment: ({ left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT } as Record<string, typeof AlignmentType.LEFT | typeof AlignmentType.CENTER | typeof AlignmentType.RIGHT>)[(cell as HTMLElement).style.textAlign] ?? (header || cell.tagName === 'TH' ? AlignmentType.CENTER : AlignmentType.LEFT), children: inline(cell.childNodes, header ? { bold: true, size: options.fontSize * 2 } : {}, Math.max(1, (widths[i] - 300) / 15)) })] })) });
       }) })];
     }
-    if (tag === 'IMG') return [new Paragraph({ keepNext: el.hasAttribute('data-keep-next'), children: inline([el], {}, width), alignment: images.has(el.getAttribute('src') ?? '') ? AlignmentType.CENTER : undefined, indent, spacing: { before: 200, after: 200 } })];
+    if (tag === 'IMG') return [new Paragraph({ keepNext: el.hasAttribute('data-keep-next'), children: inline([el], {}, width), alignment: images.has(el.getAttribute('src') ?? '') || lazyImages.has(el.getAttribute('src') ?? '') ? AlignmentType.CENTER : undefined, indent, spacing: { before: 200, after: 200 } })];
     if (tag === 'BLOCKQUOTE') {
       const children = Array.from(el.childNodes).filter(child => child.nodeType !== 3 || child.textContent?.trim());
       return children.flatMap((child, index) => block(child, level, { ...layout, left: layout.left + charsToTwips(2), quote: true }, index === children.length - 1 ? undefined : 0));

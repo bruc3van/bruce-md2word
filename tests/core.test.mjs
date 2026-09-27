@@ -9,6 +9,7 @@ import { defaults } from '../lib/config.js';
 import { parseMarkdown } from '../lib/core/markdown.js';
 import { convert } from '../lib/core/convert.js';
 import { validateArtifact } from '../lib/runtime/artifact.js';
+import { columnWidths } from '../lib/core/layout.js';
 async function document(markdown, assets = [], limits = defaults) {
   const parsed = parseMarkdown(markdown, limits);
   const output = await convert(parsed, assets, [], limits);
@@ -107,6 +108,14 @@ test('damaged images preserve alternative text without copying embedded data int
   assert.match(result.xml, /图片: 可见/);
   assert.equal(result.warnings[0].code, 'IMAGE_UNAVAILABLE');
   assert.doesNotMatch(JSON.stringify(result.warnings), /data:/);
+  // Relaxing failOn to 'error' still rejects truncated streams.
+  const source = sharp({ create: { width: 200, height: 150, channels: 3, background: '#3366aa' } });
+  const jpeg = await source.clone().jpeg().toBuffer(), png = await source.clone().png().toBuffer();
+  // A PNG missing only its IEND checksum still holds complete pixels, as before.
+  for (const cut of [jpeg.subarray(0, jpeg.length >> 1), jpeg.subarray(0, jpeg.length - 2), png.subarray(0, png.length >> 1)]) {
+    const truncated = await document('![截断](image.png)', [{ id: 'image-0', data: Buffer.from(cut) }]);
+    assert.deepEqual(truncated.warnings.map(w => w.code), ['IMAGE_UNAVAILABLE']);
+  }
 });
 test('image dimensions, image count and output limits fail before save', async () => {
   const data = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#fff' } }).png().toBuffer();
@@ -209,4 +218,53 @@ test('list text, continuation paragraphs and nested blocks share a container wit
     assert.notEqual(id('restart'), id('seven'));
     assert.match(result.numbering, /w:start w:val="7"/);
   } finally { dom.window.close(); }
+});
+test('source line breaks join CJK text without spaces but stay spaces for Latin and Hangul', async () => {
+  const result = await document('第一行中文\n第二行中文\n\n**强调中文**\n继续\n\n中文，\nEnglish\n\nEnglish\nwords\n\n中文\nEnglish\n\n한국어\n문장\n\n脚注[^n]\n\n[^n]: 脚注第一行\n脚注第二行');
+  assert.match(result.xml, /第一行中文第二行中文/);
+  assert.match(result.xml, /强调中文<\/w:t>[\s\S]*?<w:t xml:space="preserve">继续/);
+  assert.doesNotMatch(result.xml, /强调中文 |> 继续/);
+  assert.match(result.xml, /中文，English/);
+  assert.match(result.xml, /English words/);
+  assert.match(result.xml, /中文 English/);
+  assert.match(result.xml, /한국어 문장/);
+  assert.match(await result.zip.file('word/footnotes.xml').async('string'), /脚注第一行脚注第二行/);
+  assert.deepEqual(result.warnings, []);
+});
+test('JPEG photos embed unchanged; EXIF rotation is applied by re-encoding as JPEG', async () => {
+  // Noise does not compress: as PNG this photo would far exceed the per-image limit.
+  const width = 3000, height = 2000;
+  const noise = Buffer.alloc(width * height * 3);
+  for (let i = 0; i < noise.length; i++) noise[i] = (i * 2654435761) >>> 24;
+  const photo = await sharp(noise, { raw: { width, height, channels: 3 } }).jpeg({ quality: 90 }).toBuffer();
+  const limits = { ...defaults, maxImageBytes: photo.length * 2 };
+  const result = await document('![照片](a.jpg)', [{ id: 'image-0', data: photo }], limits);
+  assert.deepEqual(result.warnings, []);
+  const media = Object.values(result.zip.files).filter(f => !f.dir && f.name.startsWith('word/media/'));
+  assert.equal(media.length, 1);
+  assert.match(media[0].name, /\.jpg$/);
+  assert.deepEqual(await media[0].async('nodebuffer'), photo);
+  assert.match(await result.zip.file('[Content_Types].xml').async('string'), /ContentType="image\/jpeg" Extension="jpg"/);
+
+  const rotated = await sharp({ create: { width: 40, height: 20, channels: 3, background: '#336699' } }).jpeg().withMetadata({ orientation: 6 }).toBuffer();
+  const turned = await document('![旋转](r.jpg)', [{ id: 'image-0', data: rotated }]);
+  const file = Object.values(turned.zip.files).find(f => !f.dir && f.name.startsWith('word/media/'));
+  assert.match(file.name, /\.jpg$/);
+  const meta = await sharp(await file.async('nodebuffer')).metadata();
+  assert.equal(meta.format, 'jpeg');
+  assert.deepEqual([meta.width, meta.height, meta.orientation ?? 1], [20, 40, 1]);
+});
+test('column widths for very long tables do not overflow the call stack', () => {
+  // Spreading one argument per row threw RangeError past ~125k rows.
+  const rows = Array.from({ length: 200_000 }, (_, i) => ({ children: [{ textContent: 'x' }, { textContent: i === 7 ? '很长的中文说明文字'.repeat(4) : 'y' }] }));
+  const widths = columnWidths(rows, 2, 9000);
+  assert.equal(widths.reduce((a, b) => a + b, 0), 9000);
+  assert.ok(widths[1] > widths[0]);
+});
+test('inline code keeps 11 pt in body text and inherits the heading size', async () => {
+  const result = await document('# 标题 `code`\n\n正文 `code`');
+  const [heading, body] = result.xml.split('</w:p>');
+  assert.doesNotMatch(heading, /<w:sz /);
+  assert.match(heading, /Consolas/);
+  assert.match(body, /<w:sz w:val="22"\/>/);
 });

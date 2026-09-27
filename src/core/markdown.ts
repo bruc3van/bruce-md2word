@@ -10,6 +10,35 @@ export interface ImageReference { id: string; src: string; alt: string; line?: n
 export interface DiagramReference { id: string; source: string; line?: number }
 export interface FormulaReference { id: string; source: string; raw: string; display: boolean; unclosed: boolean; line?: number }
 export interface ParsedMarkdown { html: string; images: ImageReference[]; diagrams: DiagramReference[]; formulas: FormulaReference[]; diagnostics: Diagnostics }
+// Hangul is excluded: Korean separates words with spaces, so a line break stays a space.
+const cjk = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Bopomofo}　-〿＀-￯]/u;
+const cjkPunctuation = /[　-〿！-／：-＠［-｀｛-･]/u;
+const lastChar = (text: string): string => /[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(text) ? text.slice(-2) : text.slice(-1);
+const firstChar = (text: string): string => String.fromCodePoint(text.codePointAt(0)!);
+/** The adjacent character across emphasis/link boundaries, or undefined at any other inline token. */
+function neighbor(tokens: Token[], index: number, step: 1 | -1): string | undefined {
+  for (let i = index + step; i >= 0 && i < tokens.length; i += step) {
+    const token = tokens[i];
+    if (/_(?:open|close)$/.test(token.type)) continue;
+    if (token.type !== 'text' && token.type !== 'code_inline') return undefined;
+    if (!token.content) continue;
+    return step < 0 ? lastChar(token.content) : firstChar(token.content);
+  }
+  return undefined;
+}
+/** A source line break between CJK characters is not a word space (CSS Text segment-break rules). */
+function joinCjkLines(tokens: Token[]): void {
+  for (const token of tokens) {
+    if (token.type !== 'inline' || !token.children) continue;
+    token.children.forEach((child, i, children) => {
+      if (child.type !== 'softbreak') return;
+      const before = neighbor(children, i, -1), after = neighbor(children, i, 1);
+      if (before && after && (cjk.test(before) && cjk.test(after) || cjkPunctuation.test(before) || cjkPunctuation.test(after))) {
+        child.type = 'text'; child.content = '';
+      }
+    });
+  }
+}
 export function parseMarkdown(markdown: string, limits: Limits): ParsedMarkdown {
   const parser = new MarkdownIt({ html: false, linkify: false, typographer: false });
   installMathRules(parser);
@@ -18,6 +47,8 @@ export function parseMarkdown(markdown: string, limits: Limits): ParsedMarkdown 
   parser.validateLink = value => /^(?:data:image\/|file:)/i.test(value) || safeLink(value);
   const diagnostics = new Diagnostics(limits.maxDiagnostics);
   installDocumentRules(parser, diagnostics);
+  // Runs after footnote_tail so footnote bodies are joined too.
+  parser.core.ruler.push('cjk_line_join', state => joinCjkLines(state.tokens));
   const images: ImageReference[] = [];
   const diagrams: DiagramReference[] = [];
   const formulas: FormulaReference[] = [];

@@ -34,6 +34,10 @@ export async function saveFile(directory: string, name: string, data: Uint8Array
   signal.throwIfAborted();
   try {
     try { await mkdir(directory); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+    // On case-insensitive filesystems an existing "Output" satisfies "output";
+    // adopt its on-disk spelling. A redirect elsewhere still fails the check.
+    const actual = await realpath(directory);
+    if (path.dirname(actual) === path.dirname(directory) && path.basename(actual).toLowerCase() === path.basename(directory).toLowerCase()) directory = actual;
     await checkDirectory(directory);
     const temporary = path.join(directory, `.md2word-${randomUUID()}.tmp`);
     // Ordinary document permissions: the process umask applies, as for any saved file.
@@ -57,7 +61,9 @@ export async function saveFile(directory: string, name: string, data: Uint8Array
         if (await writeExclusive(candidate, data, signal)) return candidate;
       }
       throw new FsError('Too many existing files with this export name.', 'FS_IO_ERROR');
-    } finally { await unlink(temporary); }
+      // The result is already published (or the real error is propagating); a
+      // stale temporary file must not turn either outcome into a save failure.
+    } finally { await unlink(temporary).catch(() => {}); }
   } catch (cause) {
     signal.throwIfAborted();
     if (cause instanceof FsError) throw cause;

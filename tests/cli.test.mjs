@@ -195,3 +195,20 @@ setInterval(() => {}, 1000);
     } finally { await h.close(); }
   }
 });
+
+test('-o ending in a separator names a directory; an existing Output directory is reused on case-insensitive filesystems', async () => {
+  const h = await harness();
+  try {
+    const root = await realpath(h.root);
+    await mkdir(path.join(root, 'out'));
+    const directory = await run(h.root, ['-', '-o', 'out/'], '# 目录输出');
+    assert.equal(directory.code, 0, directory.stderr);
+    assert.equal(JSON.parse(directory.stdout).path, path.join(root, 'out', 'document.docx'));
+    await mkdir(path.join(root, 'Output'));
+    const caseInsensitive = await access(path.join(root, 'output')).then(() => true, () => false);
+    const fallback = await run(h.root, ['-'], '# 默认输出');
+    assert.equal(fallback.code, 0, fallback.stderr);
+    // Case-sensitive filesystems create a separate lowercase output directory.
+    assert.equal(JSON.parse(fallback.stdout).path, path.join(root, caseInsensitive ? 'Output' : 'output', 'document.docx'));
+  } finally { await h.close(); }
+});

@@ -1,19 +1,28 @@
-import { Document, Packer, TextRun, Paragraph, Header, Footer, PageNumber, TableOfContents, AlignmentType, SectionType, PageOrientation } from 'docx';
-import type { ParagraphChild, ISectionOptions, FileChild } from 'docx';
+import { Document, Packer, TextRun, Paragraph, Header, Footer, PageNumber, TableOfContents, AlignmentType, SectionType, PageOrientation, XmlComponent } from 'docx';
+import type { ParagraphChild, ISectionOptions, FileChild, IContext, IXmlableObject } from 'docx';
 import { latexToWordMath } from './math.js';
-import { renderDiagram } from './mermaid.js';
+import { prepareDiagramImage, finishDiagram } from './mermaid.js';
+import type { PreparedDiagram } from './mermaid.js';
 import sharp from 'sharp';
 import bmp from 'bmp-js';
 import type { Limits } from '../config.js';
 import { ExportError } from '../runtime/errors.js';
 import type { ParsedMarkdown } from './markdown.js';
-import { convertHTMLToDocx } from './html-to-docx.js';
-import type { EmbeddedImage, ImageBounds } from './html-to-docx.js';
+import { convertHTMLToDocx, createImageRun } from './html-to-docx.js';
+import type { EmbeddedImage, ImageBounds, LazyImages } from './html-to-docx.js';
 import { createStyles, PAGE_WIDTH, PAGE_HEIGHT } from './styles.js';
 import { mmToTwips } from './document-options.js';
 import type { Diagnostic } from './diagnostics.js';
-import { Diagnostics } from './diagnostics.js';
 export interface AcquiredImage { id: string; data: Uint8Array }
+/** A run placed during layout and resolved before packing; docx reads image media only at serialization. */
+class DeferredRun extends XmlComponent {
+  target?: XmlComponent;
+  constructor() { super('w:r'); }
+  override prepForXml(context: IContext): IXmlableObject | undefined {
+    if (!this.target) throw new Error('Unresolved deferred image');
+    return this.target.prepForXml(context);
+  }
+}
 export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], warnings: Diagnostic[], limits: Limits): Promise<{ data: Uint8Array; warnings: Diagnostic[] }> {
   for (const warning of warnings) parsed.diagnostics.add(warning.code, warning.message, warning.severity, warning.line);
   const images = new Map<string, EmbeddedImage>();
@@ -37,33 +46,29 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
     if (result.animated) parsed.diagnostics.add('IMAGE_FIRST_FRAME', 'Only the first frame of an animated image is included.', 'degradation', ref.line);
     images.set(asset.id, result.image);
   }
-  let html = parsed.html;
-  const diagramBounds = new Map<string, ImageBounds>();
-  if (parsed.diagrams.length) {
-    // Use the actual layout traversal, including sections and containers, rather
-    // than maintaining a second interpretation of Word directives here.
-    const preview = html.replace(/<pre data-mermaid="([^"]+)">[\s\S]*?<\/pre>/g, '<img src="$1" alt="Mermaid 图表"/>');
-    const placeholderFormulas = new Map<string, ParagraphChild[]>(parsed.formulas.map(formula => [formula.id, []]));
-    convertHTMLToDocx(preview, images, new Diagnostics(limits.maxDiagnostics), placeholderFormulas, (id, bounds) => {
-      diagramBounds.set(id, bounds);
-    });
-  }
+  // Parsing and drawing do not depend on placement, so unsupported diagrams are
+  // known before layout and keep their source. Placement bounds come from the
+  // single layout traversal below; rasterization then fills deferred runs.
+  const diagrams = new Map(parsed.diagrams.map(diagram => [diagram.id, diagram]));
+  const prepared = new Map<string, PreparedDiagram>();
   for (const diagram of parsed.diagrams) {
-    try {
-      const image = await renderDiagram(diagram.source, limits, diagramBounds.get(diagram.id));
-      normalizedBytes += image.data.byteLength;
-      if (normalizedBytes > limits.maxTotalImageBytes) throw new ExportError('Images and diagrams exceed the aggregate byte limit.', 'LIMIT_EXCEEDED');
-      for (const note of image.styleNotes ?? []) parsed.diagnostics.add('MERMAID_STYLE_UNSUPPORTED', note, 'info', diagram.line);
-      if (image.layoutAdjusted) parsed.diagnostics.add('MERMAID_LAYOUT_ADJUSTED', `横向流程图在 Word 中过窄，已改为纵向布局以保留节点与连线；调整后最小字号约 ${image.minTextPt.toFixed(1)} pt。`, 'info', diagram.line);
-      if (image.minTextPt > 0 && image.minTextPt < 8) parsed.diagnostics.add('MERMAID_SMALL_TEXT', `图表缩放后最小字号约 ${image.minTextPt.toFixed(1)} pt，低于建议的 8 pt；请拆分图表、简化标签或调整布局。`, 'info', diagram.line);
-      images.set(diagram.id, image);
-      html = html.replace(new RegExp(`<pre data-mermaid="${diagram.id}">[\\s\\S]*?</pre>`), `<img src="${diagram.id}" alt="Mermaid 图表"/>`);
-    } catch (error) {
+    try { prepared.set(diagram.id, await prepareDiagramImage(diagram.source, limits)); }
+    catch (error) {
       if (error instanceof ExportError) throw error;
-      html = html.replace(`<pre data-mermaid="${diagram.id}">`, `<p data-mermaid-notice="true">Mermaid 图表未渲染${diagram.line ? `（源文件第 ${diagram.line} 行）` : ''}：当前渲染器不支持该语法或渲染失败，以下保留原始代码。</p><pre>`);
       parsed.diagnostics.add('MERMAID_NOT_RENDERED', 'Mermaid syntax or rendering is unsupported; source retained as code.', 'degradation', diagram.line);
     }
   }
+  const html = parsed.diagrams.length ? parsed.html.replace(/<pre data-mermaid="([^"]+)">([\s\S]*?)<\/pre>/g, (_, id: string, code: string) => {
+    if (prepared.has(id)) return `<img src="${id}" alt="Mermaid 图表"/>`;
+    const line = diagrams.get(id)?.line;
+    return `<p data-mermaid-notice="true">Mermaid 图表未渲染${line ? `（源文件第 ${line} 行）` : ''}：当前渲染器不支持该语法或渲染失败，以下保留原始代码。</p><pre>${code}</pre>`;
+  }) : parsed.html;
+  const placements: { id: string; bounds: ImageBounds; alt: string; run: DeferredRun }[] = [];
+  const lazyImages: LazyImages = new Map([...prepared.keys()].map(id => [id, (bounds: ImageBounds, alt: string) => {
+    const run = new DeferredRun();
+    placements.push({ id, bounds, alt, run });
+    return run as unknown as ParagraphChild;
+  }]));
   const formulas = new Map<string, ParagraphChild[]>();
   for (const formula of parsed.formulas) {
     try {
@@ -74,7 +79,24 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
       formulas.set(formula.id, [new TextRun({ text: '[公式未转换] ', color: '92400E' }), ...formula.raw.split('\n').map((text, i) => new TextRun({ text, ...(i ? { break: 1 } : {}), font: 'Consolas' }))]);
     }
   }
-  const { sections: bodySections, options, numbering, footnotes } = convertHTMLToDocx(html, images, parsed.diagnostics, formulas);
+  const { sections: bodySections, options, numbering, footnotes } = convertHTMLToDocx(html, images, parsed.diagnostics, formulas, lazyImages);
+  for (const placement of placements) {
+    const line = diagrams.get(placement.id)?.line;
+    try {
+      const image = await finishDiagram(prepared.get(placement.id)!, limits, placement.bounds);
+      normalizedBytes += image.data.byteLength;
+      if (normalizedBytes > limits.maxTotalImageBytes) throw new ExportError('Images and diagrams exceed the aggregate byte limit.', 'LIMIT_EXCEEDED');
+      for (const note of image.styleNotes ?? []) parsed.diagnostics.add('MERMAID_STYLE_UNSUPPORTED', note, 'info', line);
+      if (image.layoutAdjusted) parsed.diagnostics.add('MERMAID_LAYOUT_ADJUSTED', `横向流程图在 Word 中过窄，已改为纵向布局以保留节点与连线；调整后最小字号约 ${image.minTextPt.toFixed(1)} pt。`, 'info', line);
+      if (image.minTextPt > 0 && image.minTextPt < 8) parsed.diagnostics.add('MERMAID_SMALL_TEXT', `图表缩放后最小字号约 ${image.minTextPt.toFixed(1)} pt，低于建议的 8 pt；请拆分图表、简化标签或调整布局。`, 'info', line);
+      placement.run.target = createImageRun(image, placement.bounds, placement.alt);
+    } catch (error) {
+      if (error instanceof ExportError) throw error;
+      // Rasterizing an SVG that already parsed and measured is not expected to fail.
+      parsed.diagnostics.add('MERMAID_NOT_RENDERED', 'Mermaid rendering failed; placeholder text retained.', 'degradation', line);
+      placement.run.target = new TextRun({ text: '[图片: Mermaid 图表]', italics: true, color: '6B7280' });
+    }
+  }
   const separateFront = bodySections[0].landscape && !!(options.title || options.toc);
   const front: FileChild[] = [];
   if (options.title) front.push(new Paragraph({ children: [new TextRun({ text: options.title, bold: true, size: 44, font: options.headingFont })], alignment: AlignmentType.CENTER, spacing: { after: 360 }, keepNext: true }));
@@ -112,6 +134,7 @@ async function normalizeImage(source: Uint8Array, limits: Limits): Promise<{ ima
   let data: Buffer;
   let width: number;
   let height: number;
+  let type: EmbeddedImage['type'] = 'png';
   let animated = false;
   if (input.subarray(0, 2).toString() === 'BM') {
     if (input.length < 54 || input.readUInt32LE(14) !== 40 || input.readUInt32LE(30) !== 0 || ![24, 32].includes(input.readUInt16LE(28))) throw new Error('Unsupported BMP encoding');
@@ -124,16 +147,30 @@ async function normalizeImage(source: Uint8Array, limits: Limits): Promise<{ ima
     for (let i = 0; i < rgba.length; i += 4) { rgba[i] = decoded.data[i + 3]; rgba[i + 1] = decoded.data[i + 2]; rgba[i + 2] = decoded.data[i + 1]; rgba[i + 3] = 255; }
     data = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
   } else {
-    const decoder = sharp(input, { failOn: 'warning', limitInputPixels: limits.maxImagePixels });
+    // Benign encoder warnings (common in camera JPEGs) must not reject an image; damaged data still fails.
+    const decoder = sharp(input, { failOn: 'error', limitInputPixels: limits.maxImagePixels });
     const meta = await sharp(input, { limitInputPixels: false }).metadata();
     if (!['png', 'jpeg', 'gif'].includes(meta.format ?? '')) throw new Error('Unsupported image format');
     checkDimensions(meta.width, meta.height, limits);
-    const normalized = await decoder.rotate().png().toBuffer({ resolveWithObject: true });
-    data = normalized.data; width = normalized.info.width; height = normalized.info.height;
-    animated = (meta.pages ?? 1) > 1;
+    if (meta.format === 'jpeg') {
+      // Word embeds JPEG natively; re-encoding photos as PNG inflates them several times over.
+      // Word ignores EXIF orientation and may misrender CMYK, so only those are re-encoded.
+      type = 'jpg';
+      if ((meta.orientation ?? 1) === 1 && meta.space !== 'cmyk') {
+        await decoder.stats(); // Full decode validates the stream without re-encoding.
+        data = input; width = meta.width; height = meta.height;
+      } else {
+        const normalized = await decoder.rotate().toColourspace('srgb').jpeg({ quality: 92 }).toBuffer({ resolveWithObject: true });
+        data = normalized.data; width = normalized.info.width; height = normalized.info.height;
+      }
+    } else {
+      const normalized = await decoder.rotate().png().toBuffer({ resolveWithObject: true });
+      data = normalized.data; width = normalized.info.width; height = normalized.info.height;
+      animated = (meta.pages ?? 1) > 1;
+    }
   }
   if (data.byteLength > limits.maxImageBytes) throw new ExportError('Decoded image exceeds the configured byte limit.', 'LIMIT_EXCEEDED');
-  return { image: { data, type: 'png', width, height }, animated };
+  return { image: { data, type, width, height }, animated };
 }
 function checkDimensions(width: number, height: number, limits: Limits): void {
   if (!(width > 0 && height > 0)) throw new Error('Invalid dimensions');

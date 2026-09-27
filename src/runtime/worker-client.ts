@@ -3,7 +3,7 @@ import type { Limits } from '../config.js';
 import type { ImageReference } from '../core/markdown.js';
 import type { AcquiredImage } from '../core/convert.js';
 import type { Diagnostic } from '../core/diagnostics.js';
-import { ExportError } from './errors.js';
+import { ExportError, EXPORT_ERROR_CODES, type ExportErrorCode } from './errors.js';
 /** Heap ceiling for one conversion; in attachment delivery the worker shares the host process. */
 export const WORKER_HEAP_MB = 4096;
 /** Transfer only buffers that own their whole ArrayBuffer (never Node's shared Buffer pool). */
@@ -36,7 +36,8 @@ export async function runWorker(markdown: string, limits: Limits, signal: AbortS
           receivedImages = true;
           pendingAcquisition = acquire(message.images, ioSignal).then(result => { if (!signal.aborted) worker.postMessage(result, transferable(result.assets.map(asset => asset.data))); }, reject);
         } else if (message.type === 'result' && receivedImages && message.data instanceof Uint8Array && Array.isArray(message.warnings)) resolve({ data: message.data, warnings: message.warnings });
-        else if (message.type === 'error') reject(new ExportError(message.message ?? 'Conversion failed.', message.code === 'LIMIT_EXCEEDED' ? 'LIMIT_EXCEEDED' : 'CONVERSION_FAILED'));
+        // Keep the worker's own export codes; library and runtime codes are not part of the protocol.
+        else if (message.type === 'error') reject(new ExportError(message.message ?? 'Conversion failed.', EXPORT_ERROR_CODES.includes(message.code as ExportErrorCode) ? message.code as ExportErrorCode : 'CONVERSION_FAILED'));
         else reject(new ExportError('Invalid conversion worker message.', 'CONVERSION_FAILED'));
       });
       if (signal.aborted) abort();
