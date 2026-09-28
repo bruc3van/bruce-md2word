@@ -86,7 +86,7 @@ Skill 是可阅读的 [操作说明](skills/bruce-md2word/SKILL.md)，会把全�
 
 `beautiful-mermaid` 虽列于开发依赖，其渲染代码及相关依赖会随安装包内置。CLI 所需的部分 DSH 文件访问和运行辅助代码也在构建时打包；独立使用不要求启动 DSH 服务。`sharp` 的平台原生包及其他传递依赖会出现在安装清单中，具体以包管理器解析结果为准。
 
-DSH 插件另外依赖宿主的 Cordis、工具、文件和执行器服务：当前声明 Cordis `~4.0.4`，DSH 服务包 `0.1.7-rc.2`。默认项目模式需要 `tools` 与 `shell`；附件模式需要 `fs` 和 `attachments`；`skills` 服务可选。依赖中的 `dsh-llm` 用于宿主类型与错误接口，不代表转换过程调用模型。完整声明见 [package.json](package.json)，运行条件见 [Agent 参考](docs/agent-reference.md#环境与工具注册)。
+DSH 插件另外依赖宿主的 Cordis、工具、文件和执行器服务：当前声明 Cordis `~4.0.4`，DSH 服务包 `>=0.1.7-rc.2 <0.3.0`（允许 0.1.7-rc.2 与 0.2.x；当前集成测试基于 0.1.7-rc.2）。默认项目模式需要 `tools` 与 `shell`；附件模式需要 `fs` 和 `attachments`；`skills` 服务可选。依赖中的 `dsh-llm` 用于宿主类型与错误接口，不代表转换过程调用模型。完整声明见 [package.json](package.json)，运行条件见 [Agent 参考](docs/agent-reference.md#环境与工具注册)。
 
 从源码构建还使用 TypeScript、esbuild、类型声明和 DSH 本地测试服务。直接安装已发布 npm 包无需手动配置这些开发工具。本项目采用 MIT 许可证；第三方代码保留各自许可证，来源见 [NOTICE](NOTICE)，打包组件的许可证随包存放于 `lib/CLI-LICENSES.txt` 和 `lib/MERMAID-LICENSES.txt`。
 
@@ -126,7 +126,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.6.4
+npm install -g bruce-md2word@0.6.5
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -139,12 +139,12 @@ npm install -g bruce-md2word@0.6.4
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.6.4 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.6.5 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.6.4
+npm install -g bruce-md2word@0.6.5
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -166,16 +166,16 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 <details>
 <summary>手动安装命令与环境要求</summary>
 
-当前包要求 Node.js `^24 || ^26`、DSH 服务包 `0.1.7-rc.2`、Cordis `~4.0.4`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
+当前包要求 Node.js `^24 || ^26`、DSH 服务包 `>=0.1.7-rc.2 <0.3.0`、Cordis `~4.0.4`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.6.4
+dsh plugin --profile web add bruce-md2word@0.6.5
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.6.4
+npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.6.5
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
