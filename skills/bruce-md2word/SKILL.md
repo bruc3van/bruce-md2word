@@ -1,5 +1,17 @@
 ---
 name: bruce-md2word
+slug: bruce-md2word
+version: 0.6.6
+displayName: Markdown 转 Word
+summary: 将 Markdown、报告和方案导出为 Word，支持中文排版、Mermaid 图表和可编辑数学公式；需要 Node.js 24 或 26。
+license: MIT
+homepage: https://github.com/bruc3van/bruce-md2word
+tags:
+  - markdown
+  - word
+  - docx
+  - mermaid
+  - office
 description: 使用本地 bruce-md2word CLI 将 Markdown 或新撰写的报告、方案导出为 Word，支持中文排版、Mermaid 图表和可编辑数学公式。适用于要求交付 DOCX 的任务；不用于读取或修改已有 Word、PDF 转换或自定义 Word 模板。
 ---
 
