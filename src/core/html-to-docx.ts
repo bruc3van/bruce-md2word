@@ -40,8 +40,10 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
   for (const el of Array.from(dom.window.document.querySelectorAll('[data-footnote-id]'))) {
     noteElements.set(el.getAttribute('data-footnote-id')!, el);
   }
+  /** Source line of the nearest Markdown block, for diagnostics raised after rendering. */
+  const lineOf = (el: Element | null | undefined): number | undefined => Number(el?.closest('[data-source-line]')?.getAttribute('data-source-line')) || undefined;
   function directiveFailure(el: Element, message: string): void {
-    diagnostics.add('LAYOUT_DIRECTIVE_INVALID', message, 'degradation', Number(el.getAttribute('data-source-line')) || undefined);
+    diagnostics.add('LAYOUT_DIRECTIVE_INVALID', message, 'degradation', lineOf(el));
     const p = dom.window.document.createElement('p');
     p.textContent = el.getAttribute('data-word-directive');
     el.replaceWith(p);
@@ -76,13 +78,13 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
   for (const caption of Array.from(dom.window.document.querySelectorAll('[data-caption]'))) {
     if (isFigure(caption.previousElementSibling)) caption.previousElementSibling!.setAttribute('data-keep-next', 'true');
     else if (isFigure(caption.nextElementSibling)) caption.setAttribute('data-keep-next', 'true');
-    else diagnostics.add('LAYOUT_DIRECTIVE_INVALID', 'Caption has no adjacent image or table.');
+    else diagnostics.add('LAYOUT_DIRECTIVE_INVALID', 'Caption has no adjacent image or table.', 'degradation', lineOf(caption));
     const kind = caption.getAttribute('data-caption-kind') as 'figure' | 'table' | null;
     const id = caption.getAttribute('data-caption-id');
     if (kind && id) {
       const target = isFigure(caption.previousElementSibling) ? caption.previousElementSibling : isFigure(caption.nextElementSibling) ? caption.nextElementSibling : null;
       if (!target || (target.tagName === 'TABLE') !== (kind === 'table') || captions.has(id)) {
-        diagnostics.add('LAYOUT_DIRECTIVE_INVALID', 'Numbered caption needs a matching adjacent figure/table and unique id; caption text retained.');
+        diagnostics.add('LAYOUT_DIRECTIVE_INVALID', 'Numbered caption needs a matching adjacent figure/table and unique id; caption text retained.', 'degradation', lineOf(caption));
         caption.removeAttribute('data-caption-id');
       } else captions.set(id, { bookmark: `caption_${captions.size + 1}`, label: kind === 'figure' ? '图' : '表', number: ++captionCounts[kind], sequence: kind === 'figure' ? 'Figure' : 'Table' });
     }
@@ -160,14 +162,14 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
             const field = new SimpleField(`REF ${target.bookmark} \\h`);
             field.addChildElement(new TextRun({ ...style, text: `${target.label} ${target.number}` }));
             runs.push(field);
-          } else { runs.push(...children); diagnostics.add('LINK_UNAVAILABLE', 'Cross-reference has no matching numbered caption; link text retained.'); }
+          } else { runs.push(...children); diagnostics.add('LINK_UNAVAILABLE', 'Cross-reference has no matching numbered caption; link text retained.', 'degradation', lineOf(el)); }
         } else if (href.startsWith('#')) {
           let target: string | undefined;
           try { target = anchors.get(decodeURIComponent(href.slice(1))); } catch { /* Invalid fragment. */ }
           if (target) runs.push(new InternalHyperlink({ anchor: target, children }));
           else {
             runs.push(...children);
-            diagnostics.add('LINK_UNAVAILABLE', 'Internal link has no matching heading; link text retained.');
+            diagnostics.add('LINK_UNAVAILABLE', 'Internal link has no matching heading; link text retained.', 'degradation', lineOf(el));
           }
         } else if (href) runs.push(new ExternalHyperlink({ link: href, children }));
         else runs.push(...children);
@@ -177,7 +179,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
   }
   function list(el: Element, level: number, layout: Layout): Block[] {
     const safeLevel = Math.min(level, 4);
-    if (level > 4) diagnostics.add('LIST_DEPTH_REDUCED', 'List nesting deeper than five levels was flattened.');
+    if (level > 4) diagnostics.add('LIST_DEPTH_REDUCED', 'List nesting deeper than five levels was flattened.', 'degradation', lineOf(el));
     const ordered = el.tagName === 'OL';
     let reference = `list-${nextList++}`;
     const textLeft = Math.min(layout.left + (level > 4 ? 0 : 720), contentWidth() - layout.right - 720);
@@ -190,7 +192,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
     const explicitStart = el.hasAttribute('start');
     if (ordered && id && el.getAttribute('data-list-action') === 'continue') {
       if (prior && prior.level === safeLevel && prior.left === textLeft && !explicitStart) reference = prior.reference;
-      else diagnostics.add('LIST_CONTINUATION_UNAVAILABLE', 'List continuation needs a preceding matching list in scope, the same indentation, and no explicit non-default start.');
+      else diagnostics.add('LIST_CONTINUATION_UNAVAILABLE', 'List continuation needs a preceding matching list in scope, the same indentation, and no explicit non-default start.', 'degradation', lineOf(el));
     } else if (ordered && !id && sectionLevel && level === 0 && !layout.quote && el.parentElement === dom.window.document.body && !explicitStart && autoList) reference = autoList;
     if (ordered && id) namedLists.set(key, { reference, level: safeLevel, left: textLeft });
     if (ordered && !id && sectionLevel && level === 0 && !layout.quote && el.parentElement === dom.window.document.body) autoList = reference;
@@ -275,7 +277,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       const ratios = el.hasAttribute('data-widths') ? JSON.parse(el.getAttribute('data-widths')!) as number[] : undefined;
       let widths = columnWidths(trs, count, tableWidth, ratios);
       if (ratios && widths.some(width => width < 480)) {
-        diagnostics.add('LAYOUT_DIRECTIVE_INVALID', 'Explicit column widths leave less than 480 twips for a cell; automatic widths used.');
+        diagnostics.add('LAYOUT_DIRECTIVE_INVALID', 'Explicit column widths leave less than 480 twips for a cell; automatic widths used.', 'degradation', lineOf(el));
         widths = columnWidths(trs, count, tableWidth);
       }
       const outer = { style: BorderStyle.SINGLE, size: 6, color: '9CA3AF' };
@@ -319,7 +321,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       const paragraphs: Paragraph[] = [];
       const noteBlocks = (el: Element): void => {
         if (el.tagName === 'TABLE') {
-          diagnostics.add('FOOTNOTE_TABLE_FLATTENED', 'Footnote table cells retained as separate paragraphs.');
+          diagnostics.add('FOOTNOTE_TABLE_FLATTENED', 'Footnote table cells retained as separate paragraphs.', 'degradation', lineOf(el));
           for (const cell of Array.from(el.querySelectorAll('th,td'))) paragraphs.push(new Paragraph({ style: 'FootnoteText', children: inline(cell.childNodes) }));
         } else if (el.tagName === 'P' && !el.hasAttribute('data-math-block')) {
           paragraphs.push(new Paragraph({ style: 'FootnoteText', children: inline(el.childNodes), indent: { firstLine: 0 }, widowControl: true }));
@@ -335,7 +337,7 @@ export function convertHTMLToDocx(html: string, images: Map<string, EmbeddedImag
       if (paragraphs.length) paragraphs[0].addRunToFront(new TextRun(' '));
       if (referencedNotes.has(id)) footnotes[id] = { children: paragraphs.length ? paragraphs : [new Paragraph('')] };
       else {
-        diagnostics.add('FOOTNOTE_UNUSED', 'Footnote without a body reference retained as body text.', 'info');
+        diagnostics.add('FOOTNOTE_UNUSED', 'Footnote without a body reference retained as body text.', 'info', lineOf(note.querySelector('[data-source-line]')));
         children.push(...paragraphs);
       }
     }

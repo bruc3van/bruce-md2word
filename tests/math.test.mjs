@@ -131,6 +131,12 @@ test('invalid or unsupported formulas preserve complete source and never report 
   const unclosed = await exported('before\n\n$$\nx+1');
   assert.equal(unclosed.warnings[0].line, 3);
   assert.ok(unclosed.xml.includes('x+1'));
+  // An unclosed opener ends at the first blank line; later content still converts.
+  const bounded = await exported('$$\nx = 1\n\n第二段正文。\n\n## 第二章\n\n$y$');
+  assert.deepEqual(bounded.warnings.map(w => [w.code, w.line]), [['MATH_NOT_CONVERTED', 1]]);
+  assert.ok(bounded.xml.includes('第二段正文。'));
+  assert.ok(bounded.xml.includes('w:val="Heading2"'));
+  assert.equal(bounded.count('oMath'), 1);
 });
 
 test('formula budgets and bounded diagnostics preserve degradation', async () => {

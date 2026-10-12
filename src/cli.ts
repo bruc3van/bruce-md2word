@@ -10,6 +10,7 @@ import { acquireImages } from './runtime/assets.js';
 import { runWorker } from './runtime/worker-client.js';
 import { saveFile } from './runtime/save-file.js';
 import { ExportError, ContentIncompleteError } from './runtime/errors.js';
+import { FsError } from '@deepseek-ai/dsh-fs';
 
 const help = `Usage: bruce-md2word <input.md | -> [-o output.docx] [--strict] [--asset-base-dir directory]
 
@@ -23,8 +24,9 @@ Success is reported as JSON on stdout; errors are JSON on stderr.
 Node.js 24 or 26 required. No Office, Python or external converter is needed.
 `;
 const controller = new AbortController();
-let signaled = false;
-const onSignal = () => { signaled = true; controller.abort(new DOMException('Export canceled.', 'AbortError')); };
+// Conventional 128 + signal number exit codes.
+let signalExitCode: number | undefined;
+const onSignal = (signal: NodeJS.Signals) => { signalExitCode = signal === 'SIGTERM' ? 143 : 130; controller.abort(new DOMException('Export canceled.', 'AbortError')); };
 process.once('SIGINT', onSignal);
 process.once('SIGTERM', onSignal);
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -74,7 +76,9 @@ async function main(): Promise<void> {
   let config: Config = { workspaceRoot: process.cwd() };
   if (values.request) {
     if (positionals.length || values.output || values.strict || values['asset-base-dir']) throw new ExportError('--request cannot be combined with conversion arguments.', 'INVALID_INPUT');
-    const envelope = JSON.parse(await stdin(32 * 1024 * 1024));
+    let envelope;
+    try { envelope = JSON.parse(await stdin(32 * 1024 * 1024)); }
+    catch (cause) { if (cause instanceof SyntaxError) throw new ExportError('CLI request is not valid JSON.', 'INVALID_INPUT', { cause }); throw cause; }
     if (envelope?.protocol !== 1 || !envelope.config || typeof envelope.config !== 'object') throw new ExportError('Unsupported CLI request protocol.', 'INVALID_INPUT');
     input = validateInput(envelope.input);
     config = { ...envelope.config, workspaceRoot: process.cwd() };
@@ -105,7 +109,11 @@ async function main(): Promise<void> {
     // macOS /tmp. The default ./output (also used by --request) must not be a
     // redirected directory. Publication checks repeat immediately before the syscall.
     const explicit = values.output ? await realpath(requestedDir).catch(error => { if (error.code !== 'ENOENT') throw error; }) : undefined;
-    const directory = explicit ?? path.join(await realpath(path.dirname(requestedDir)), path.basename(requestedDir));
+    const parent = explicit ? undefined : await realpath(path.dirname(requestedDir)).catch(error => {
+      if (error.code === 'ENOENT') throw new FsError('The parent of the output directory does not exist; only the last directory level is created.', 'FS_NOT_FOUND', { cause: error });
+      throw error;
+    });
+    const directory = explicit ?? path.join(parent!, path.basename(requestedDir));
     signal.throwIfAborted();
     const saved = await saveFile(directory, source.fileName, result.data, signal);
     // Once published, the file exists: report it rather than a cancellation.
@@ -119,7 +127,7 @@ catch (cause) {
   // DOMException exposes a numeric legacy code; the protocol reports string codes only.
   const code = typeof error?.code === 'string' ? error.code : error?.name === 'AbortError' ? 'ABORTED' : 'CONVERSION_FAILED';
   process.stderr.write(JSON.stringify({ protocol: 1, error: { code, message: (error?.message ?? 'Conversion failed.').slice(0, 500), ...(error instanceof ContentIncompleteError ? { diagnostics: error.diagnostics } : {}) } }) + '\n');
-  process.exitCode = signaled ? 130 : 1;
+  process.exitCode = signalExitCode ?? 1;
 } finally {
   clearTimeout(timer);
   process.removeListener('SIGINT', onSignal);

@@ -46,7 +46,9 @@ export function installMathRules(parser: MarkdownIt): void {
     let closed = false;
     let next = start;
     for (; next < end; next++) {
-      if (next > start && state.sCount[next] < state.blkIndent && !state.isEmpty(next)) break;
+      // TeX display math cannot contain a blank line, so an unclosed opener
+      // ends there instead of swallowing the rest of the document.
+      if (next > start && (state.isEmpty(next) || state.sCount[next] < state.blkIndent)) break;
       const line = state.src.slice(state.bMarks[next] + state.tShift[next], state.eMarks[next]);
       const body = next === start ? line.slice(opener.length) : line;
       let at = body.indexOf(closer);

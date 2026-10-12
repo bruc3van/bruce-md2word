@@ -161,3 +161,49 @@ test('chapter list state does not leak into footnote lists', async () => {
     assert.deepEqual(result.warnings,[]);
   } finally { result.dom.window.close(); }
 });
+
+test('layout diagnostics raised after rendering carry Markdown source lines', async () => {
+  const result = await build('# 标题\n\n见[不存在](#nope)与[表号](#ref:missing)。\n\n- a\n  - b\n    - c\n      - d\n        - e\n          - f\n\n<!-- word:caption -->\n\n孤立题注\n\n正文[^n]。\n\n[^n]: | a | b |\n    | - | - |\n    | 1 | 2 |');
+  try {
+    const lines = Object.fromEntries(result.warnings.map(w => [w.code + (w.message.startsWith('Cross') ? ':ref' : ''), w.line]));
+    assert.equal(lines.LINK_UNAVAILABLE, 3);
+    assert.equal(lines['LINK_UNAVAILABLE:ref'], 3);
+    assert.equal(lines.LIST_DEPTH_REDUCED, 10);
+    assert.equal(lines.LAYOUT_DIRECTIVE_INVALID, 14);
+    for (const warning of result.warnings) assert.ok(Number.isSafeInteger(warning.line), JSON.stringify(warning));
+  } finally { result.dom.window.close(); }
+});
+
+test('Word is asked to update fields on open only when a TOC needs it', async () => {
+  const settings = async markdown => (await (await build(markdown)).zip.file('word/settings.xml').async('string'));
+  assert.doesNotMatch(await settings('# 简单\n\n见[表号](#ref:t)。\n\n<!-- word:caption kind=table id=t -->\n\n结果\n\n| a |\n| - |\n| 1 |'), /updateFields/);
+  assert.match(await settings('<!-- word:document {"toc":true} -->\n\n# 标题'), /updateFields/);
+});
+
+test('<br> becomes a line break, task markers become checkboxes and other HTML is reported', async () => {
+  const result = await build('| a | b |\n| - | - |\n| 第一行<br>第二行<br/>第三行 | 转义\\<br>保留 |\n\n- [ ] 待办\n- [x] 完成\n\n文本<sup>2</sup>，List<String> 不报告。\n\n`<br>` 代码保留。');
+  try {
+    const xml = new result.dom.window.XMLSerializer().serializeToString(result.doc);
+    assert.equal(els(els(result.doc, 'tc')[2], 'br').length, 2);
+    assert.ok(text(els(result.doc, 'tc')[3]).includes('<br>'));
+    assert.ok(paragraph(result.doc, '☐ 待办') && paragraph(result.doc, '☑ 完成'));
+    const tasks = await build('- [ ]\n- [x]\n- [ ]\n  下一行正文\n- [X]\n  next line\n- [x]不是任务');
+    try {
+      assert.deepEqual(els(tasks.doc, 'p').map(text), ['☐', '☑', '☐ 下一行正文', '☑ next line', '[x]不是任务']);
+      assert.deepEqual(tasks.warnings, []);
+    } finally { tasks.dom.window.close(); }
+    assert.ok(xml.includes('&lt;br&gt;') && xml.includes('&lt;sup&gt;'));
+    assert.deepEqual(result.warnings.map(w => [w.code, w.severity, w.line]), [['HTML_AS_TEXT', 'info', 8]]);
+  } finally { result.dom.window.close(); }
+});
+
+test('latinFont splits Latin and East Asian fonts without changing the defaults', async () => {
+  const styles = async markdown => (await (await build(markdown)).zip.file('word/styles.xml').async('string'));
+  const plain = await styles('# 标题');
+  assert.doesNotMatch(plain, /Times New Roman/);
+  const split = await styles('<!-- word:document {"latinFont":"Times New Roman"} -->\n\n# 标题');
+  assert.match(split, /w:ascii="Times New Roman"[^>]*w:eastAsia="SimSun"|w:eastAsia="SimSun"[^>]*w:ascii="Times New Roman"/);
+  assert.match(split, /w:eastAsia="SimHei"/);
+  const invalid = await build('<!-- word:document {"latinFont":" "} -->\n\n正文');
+  assert.equal(invalid.warnings[0].code, 'LAYOUT_DIRECTIVE_INVALID');
+});

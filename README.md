@@ -126,7 +126,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.6.6
+npm install -g bruce-md2word@0.7.0
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -139,12 +139,12 @@ npm install -g bruce-md2word@0.6.6
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.6.6 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.7.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.6.6
+npm install -g bruce-md2word@0.7.0
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -169,13 +169,13 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 当前包要求 Node.js `^24 || ^26`、DSH 服务包 `>=0.1.7-rc.2 <0.3.0`、Cordis `~4.0.4`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.6.6
+dsh plugin --profile web add bruce-md2word@0.7.0
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.6.6
+npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.7.0
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
@@ -238,7 +238,7 @@ Mermaid 使用本地轻量渲染器，不覆盖官方全部语法。支持流程
 
 数学公式使用 Temml 在本地解析，通过自有转换层生成 Word 原生公式，无需浏览器、字体图片或外部转换服务。支持 `$...$`、`\(...\)` 行内公式，以及独立块中的 `$$...$$`、`\[...\]`。不支持的结构或错误语法保留完整源码并报告 `MATH_NOT_CONVERTED`，严格模式拒绝保存。自定义宏、公式编号与引用等暂不支持，具体边界见 [公式参考](docs/agent-reference.md#数学公式)。
 
-原始 HTML 按文本保留，有限的 `<!-- word:... -->` 排版指令另行解析。命名脚注转换为 Word 原生脚注，支持多段内容及重复引用；未定义、重复定义或嵌套脚注会保留内容并报告诊断。任务复选框仍按普通文本输出。
+原始 HTML 按文本保留并报告 `HTML_AS_TEXT` 信息提示，`<br>` 转为换行；有限的 `<!-- word:... -->` 排版指令另行解析。命名脚注转换为 Word 原生脚注，支持多段内容及重复引用；未定义、重复定义或嵌套脚注会保留内容并报告诊断。任务列表 `- [ ]` / `- [x]` 显示为 ☐ / ☑。
 
 正文使用首行两字符的独立样式；列表换行与续段对齐正文，嵌套代码、图片和表格按容器宽度排版。独立图片居中、不带首行缩进，小图默认不放大；表格保留 Markdown 指定的左、中、右对齐，默认按内容估算列宽；可显式指定列宽比例、图题、列表续接和章节重启策略。用法及分页边界见 [文档排版说明](docs/document-layout.md)。
 

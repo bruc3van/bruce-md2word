@@ -11,7 +11,7 @@ import type { ParsedMarkdown } from './markdown.js';
 import { convertHTMLToDocx, createImageRun } from './html-to-docx.js';
 import type { EmbeddedImage, ImageBounds, LazyImages } from './html-to-docx.js';
 import { createStyles, PAGE_WIDTH, PAGE_HEIGHT } from './styles.js';
-import { mmToTwips } from './document-options.js';
+import { mmToTwips, runFont } from './document-options.js';
 import type { Diagnostic } from './diagnostics.js';
 export interface AcquiredImage { id: string; data: Uint8Array }
 /** A run placed during layout and resolved before packing; docx reads image media only at serialization. */
@@ -100,7 +100,7 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
   }
   const separateFront = bodySections[0].landscape && !!(options.title || options.toc);
   const front: FileChild[] = [];
-  if (options.title) front.push(new Paragraph({ children: [new TextRun({ text: options.title, bold: true, size: 44, font: options.headingFont })], alignment: AlignmentType.CENTER, spacing: { after: 360 }, keepNext: true }));
+  if (options.title) front.push(new Paragraph({ children: [new TextRun({ text: options.title, bold: true, size: 44, font: runFont(options.headingFont, options.latinFont) })], alignment: AlignmentType.CENTER, spacing: { after: 360 }, keepNext: true }));
   if (options.toc) {
     front.push(new Paragraph({ text: '目录', alignment: AlignmentType.CENTER, keepNext: true }), new TableOfContents('目录', { hyperlink: true, headingStyleRange: `1-${options.tocDepth}`, beginDirty: true }));
     // A separate front section already ends with a next-page section break.
@@ -109,7 +109,7 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
   const contentSections = separateFront
     ? [{ landscape: false, children: front }, ...bodySections]
     : bodySections.map((section, i) => ({ ...section, children: [...(i === 0 ? front : []), ...section.children] }));
-  const runningText = { size: 20, font: options.font };
+  const runningText = { size: 20, font: runFont(options.font, options.latinFont) };
   const sections: ISectionOptions[] = contentSections.map(section => ({
     properties: { type: SectionType.NEXT_PAGE, page: {
       size: { width: PAGE_WIDTH, height: PAGE_HEIGHT, orientation: section.landscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT },
@@ -125,7 +125,9 @@ export async function convert(parsed: ParsedMarkdown, assets: AcquiredImage[], w
     ] })] }) } } : {}),
     children: section.children,
   }));
-  const document = new Document({ title: options.title || undefined, styles: createStyles(options), numbering, footnotes, features: { updateFields: true }, sections });
+  // REF/SEQ/NOTEREF fields carry correct cached results; only a TOC needs Word to
+  // update fields on open, which otherwise prompts on every document.
+  const document = new Document({ title: options.title || undefined, styles: createStyles(options), numbering, footnotes, ...(options.toc ? { features: { updateFields: true } } : {}), sections });
   const data = await Packer.toBuffer(document);
   if (data.byteLength > limits.maxOutputBytes) throw new ExportError('DOCX exceeds the configured output limit.', 'LIMIT_EXCEEDED');
   return { data, warnings: parsed.diagnostics.items };

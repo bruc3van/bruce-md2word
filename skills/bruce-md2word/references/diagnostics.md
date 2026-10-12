@@ -34,6 +34,7 @@ bruce-md2word "docs/报告.md" -o "output/项目报告-诊断.docx"
 | `LIST_DEPTH_REDUCED` | 降级 | 列表嵌套超过五层，深层已被压平。减少嵌套层级。 |
 | `FOOTNOTE_UNDEFINED` / `FOOTNOTE_DUPLICATE` / `FOOTNOTE_NESTED` | 降级 | 补齐定义、合并重复定义或移除嵌套引用。不要自动删除脚注正文来让严格模式通过。 |
 | `FOOTNOTE_TABLE_FLATTENED` | 降级 | 脚注中的表格已改为逐段排列。需要表格时移到正文。 |
+| `HTML_AS_TEXT` | 信息 | 正文含原始 HTML 标签（如 `<sup>`、`<span>`），按字面文本输出。改用 Markdown 语法；`<br>` 会转换为换行，不报告此项。 |
 | `FOOTNOTE_UNUSED` | 信息 | 未被引用的脚注定义保留在正文，确认是否遗漏引用。 |
 | `MERMAID_SMALL_TEXT` | 信息 | 检查图表，简化标签或拆分后再导出，需要时检查实际版面。 |
 | `MERMAID_TEXT_ENLARGED` | 信息 | 流程图或状态图缩放后文字过小，已放大图内字号（最多 1.5 倍）后重新排布；检查最终页面。仍过小时同时返回 `MERMAID_SMALL_TEXT`。 |
@@ -51,5 +52,5 @@ bruce-md2word "docs/报告.md" -o "output/项目报告-诊断.docx"
 | `FS_TOO_LARGE` / `LIMIT_EXCEEDED` | 查看消息，按内容含义拆分文档或降低图片大小与复杂度；可能是字节数、时间、内存、公式或脚注数量（各 1000 个）等上限，不盲目重复执行。 |
 | `FS_SANDBOX_DENIED` | 输入越出允许读取的目录，或输出目录（含默认的 `./output`）是符号链接。改用真实目录或显式 `-o`。 |
 | `FS_PERMISSION_DENIED` / `FS_IO_ERROR` | 检查输出目录权限和磁盘状态；同名文件过多时换一个文件名。 |
-| `ABORTED` | 导出被中断信号取消（退出码 130），未保存文件；确认是否为用户或宿主主动取消，不自动重试。 |
+| `ABORTED` | 导出被中断信号取消（SIGINT 退出码 130，SIGTERM 退出码 143），未保存文件；确认是否为用户或宿主主动取消，不自动重试。 |
 | `CONFIGURATION_ERROR` / `CONVERSION_FAILED` | 保留实际错误，检查 Node.js 版本和依赖；无法定位时报告失败，不伪造产物路径。 |

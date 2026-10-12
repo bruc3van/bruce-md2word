@@ -1,7 +1,7 @@
 ---
 name: bruce-md2word
 slug: bruce-md2word
-version: 0.6.6
+version: 0.7.0
 displayName: Markdown 转 Word
 summary: 将 Markdown、报告和方案导出为 Word，支持中文排版、Mermaid 图表和可编辑数学公式；需要 Node.js 24 或 26。
 license: MIT
@@ -64,4 +64,4 @@ description: 使用本地 bruce-md2word CLI 将 Markdown 或新撰写的报告�
 - PNG、JPEG、GIF、BMP 图片可嵌入，动图只保留首帧并报告降级；网络图片不会自动下载，SVG 输入不支持。不要把网络图片或越界路径当作已嵌入成功。
 - Mermaid 流程图、状态图、时序图、类图、ER 图、XY 图的常用语法转为 PNG；不覆盖官方全部语法。横向流程图若缩放后文字过小，工具可能保留节点和连线、自动改为纵向布局并返回 `MERMAID_LAYOUT_ADJUSTED` 信息提示；流程图和状态图还可能放大图内字号并返回 `MERMAID_TEXT_ENLARGED`。宽图可放入横向分节以获得更大的显示宽度。仍过小的宽图应按含义简化或拆分，不能为通过检查随意删除关系。流程图支持节点字号、节点/连线虚线和常用 init/YAML 主题颜色；`MERMAID_STYLE_UNSUPPORTED` 表示部分样式未应用，为信息提示；无法解析的流程图语句会保留源码并报告 `MERMAID_NOT_RENDERED`。
 - LaTeX 行内及块公式转为可编辑 Word 原生公式；自定义宏、公式编号与引用等不支持。每次导出最多 1000 个公式、1000 个脚注定义，超出时整体返回 `LIMIT_EXCEEDED`（不会降级保存），长文档需拆分后分别导出。不支持的公式或图表可能保留源码并产生降级警告。
-- 命名脚注转换为 Word 原生脚注，重复引用使用 NOTEREF 域；未定义、重复或嵌套脚注会报告诊断。任意 HTML 和任务复选框仍按普通文本处理，不以严格成功证明版面验收通过。
+- 命名脚注转换为 Word 原生脚注，重复引用使用 NOTEREF 域；未定义、重复或嵌套脚注会报告诊断。`<br>` 转为换行，任务列表 `- [ ]` / `- [x]` 显示为 ☐ / ☑；其他 HTML 按普通文本输出并报告 `HTML_AS_TEXT` 信息提示，不以严格成功证明版面验收通过。

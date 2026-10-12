@@ -17,6 +17,7 @@
 | 参数 | 含义与范围 |
 | --- | --- |
 | `font` / `headingFont` | 正文/标题字体名称，非空；字体需安装在阅读器所在系统 |
+| `latinFont` | 可选，西文与数字字体（如 `Times New Roman`），中文仍用 `font` / `headingFont`；未设置时所有文字使用同一字体 |
 | `fontSize` | 正文和表格字号，8～24pt；代码、题注、脚注保留各自字号 |
 | `lineSpacing` | 正文行距倍数，1～3；标题、代码、脚注有独立行距 |
 | `firstLineIndent` | 正文首行缩进字符数，0～4；不影响列表、图片、表格 |
@@ -33,7 +34,7 @@
 <!-- word:document {"preset":"technical","fontSize":12,"firstLineIndent":0,"margins":{"left":30,"right":20},"toc":true,"tocDepth":2,"pageNumbers":true,"headingNumbering":true} -->
 ```
 
-目录使用 Word 原生 TOC 域，正文从目录后的新页开始。页码使用 PAGE/NUMPAGES 域，包括目录页，跨分节连续。文档请求打开时更新域，但首次显示可能尚无目录内容；请在 Word/WPS 中更新整个目录和全部域，再检查页码。编辑、移动图表后，前向引用可能需要再次更新。不同阅读器分页不要求一致，目录必须与当前阅读器的实际页面一致。
+目录使用 Word 原生 TOC 域，正文从目录后的新页开始。页码使用 PAGE/NUMPAGES 域，包括目录页，跨分节连续。生成目录时文档请求打开时更新域（未生成目录时不请求，避免 Word 每次打开都弹出更新提示），但首次显示可能尚无目录内容；请在 Word/WPS 中更新整个目录和全部域，再检查页码。编辑、移动图表后，前向引用可能需要再次更新。不同阅读器分页不要求一致，目录必须与当前阅读器的实际页面一致。
 
 ## 标题编号、自动题注与交叉引用
 

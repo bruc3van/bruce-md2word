@@ -70,7 +70,11 @@ test('CLI file mode, default output, strict and invalid requests', async () => {
       const invalid = await run(h.root, ['--request'], request);
       assert.equal(invalid.code, 1);
       assert.equal(invalid.stdout, '');
+      assert.equal(JSON.parse(invalid.stderr).error.code, 'INVALID_INPUT');
     }
+    const nested = await run(h.root, ['-', '-o', path.join('missing', 'deeper', 'out.docx')], 'x');
+    assert.equal(nested.code, 1);
+    assert.equal(JSON.parse(nested.stderr).error.code, 'FS_NOT_FOUND');
   } finally { await h.close(); }
 });
 
@@ -99,18 +103,20 @@ test('CLI resolves an explicit -o directory alias and publishes umask permission
   } finally { await h.close(); }
 });
 
-test('CLI reports a string error code and exit 130 when interrupted', { skip: process.platform === 'win32' }, async () => {
+test('CLI reports a string error code and 128+signal exit codes when interrupted', { skip: process.platform === 'win32' }, async () => {
   const h = await harness();
   try {
-    const child = spawn(process.execPath, [cli, '-'], { cwd: h.root, stdio: ['pipe', 'pipe', 'pipe'] });
-    let stderr = '';
-    child.stderr.on('data', data => { stderr += data; });
-    const closed = new Promise(resolve => child.on('close', resolve));
-    // stdin stays open, so the CLI is waiting for input when the signal arrives.
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    child.kill('SIGINT');
-    assert.equal(await closed, 130);
-    assert.equal(JSON.parse(stderr).error.code, 'ABORTED');
+    for (const [signal, exitCode] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+      const child = spawn(process.execPath, [cli, '-'], { cwd: h.root, stdio: ['pipe', 'pipe', 'pipe'] });
+      let stderr = '';
+      child.stderr.on('data', data => { stderr += data; });
+      const closed = new Promise(resolve => child.on('close', resolve));
+      // stdin stays open, so the CLI is waiting for input when the signal arrives.
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      child.kill(signal);
+      assert.equal(await closed, exitCode, signal);
+      assert.equal(JSON.parse(stderr).error.code, 'ABORTED');
+    }
   } finally { await h.close(); }
 });
 

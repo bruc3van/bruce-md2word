@@ -13,7 +13,8 @@ export interface ParsedMarkdown { html: string; images: ImageReference[]; diagra
 // Hangul is excluded: Korean separates words with spaces, so a line break stays a space.
 const cjk = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Bopomofo}　-〿＀-￯]/u;
 const cjkPunctuation = /[　-〿！-／：-＠［-｀｛-･]/u;
-const lastChar = (text: string): string => /[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(text) ? text.slice(-2) : text.slice(-1);
+const sourceLineBlocks = new Set(['paragraph_open', 'heading_open', 'bullet_list_open', 'ordered_list_open', 'list_item_open', 'blockquote_open', 'table_open', 'tr_open']);
+const lastChar =(text: string): string => /[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(text) ? text.slice(-2) : text.slice(-1);
 const firstChar = (text: string): string => String.fromCodePoint(text.codePointAt(0)!);
 /** The adjacent character across emphasis/link boundaries, or undefined at any other inline token. */
 function neighbor(tokens: Token[], index: number, step: 1 | -1): string | undefined {
@@ -39,6 +40,33 @@ function joinCjkLines(tokens: Token[]): void {
     });
   }
 }
+const lineBreakTag = /<br\s*\/?>/i;
+// Known tag names only, so prose such as List<String> is not reported.
+const htmlTag = /<\/?(?:a|abbr|b|big|center|code|del|details|div|em|font|h[1-6]|hr|i|img|ins|kbd|li|mark|ol|p|pre|s|small|span|strong|sub|summary|sup|table|td|th|tr|u|ul)(?:\s[^<>]*)?\/?>/i;
+/** Raw HTML stays text, except <br> (common in generated table cells) and task markers. */
+function adaptPlainHtml(tokens: Token[], diagnostics: Diagnostics, TokenClass: typeof Token): void {
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.type !== 'inline' || !token.children) continue;
+    const line = token.map ? token.map[0] + 1 : undefined;
+    // Before text_join, an escaped \< is still a separate text_special token.
+    token.children = token.children.flatMap(child => {
+      if (child.type !== 'text' || !lineBreakTag.test(child.content)) return [child];
+      return child.content.split(lineBreakTag).flatMap((content, index) => {
+        const text = Object.assign(new TokenClass('text', '', 0), { content });
+        return index ? [new TokenClass('hardbreak', 'br', 0), text] : [text];
+      });
+    });
+    if (token.children.some(child => child.type === 'text' && htmlTag.test(child.content))) {
+      diagnostics.add('HTML_AS_TEXT', 'Raw HTML is not interpreted and is shown as literal text; use Markdown syntax instead.', 'info', line);
+    }
+    const first = token.children[0];
+    if (tokens[i - 1]?.type === 'paragraph_open' && tokens[i - 2]?.type === 'list_item_open' && first?.type === 'text') {
+      // The marker may end the token: an empty item, or text starting on the next line after a soft break.
+      first.content = first.content.replace(/^\[([ xX])\](\s+|$)/, (_, mark: string, space: string) => (mark === ' ' ? '☐' : '☑') + (space ? ' ' : ''));
+    }
+  }
+}
 export function parseMarkdown(markdown: string, limits: Limits): ParsedMarkdown {
   const parser = new MarkdownIt({ html: false, linkify: false, typographer: false });
   installMathRules(parser);
@@ -47,6 +75,7 @@ export function parseMarkdown(markdown: string, limits: Limits): ParsedMarkdown 
   parser.validateLink = value => /^(?:data:image\/|file:)/i.test(value) || safeLink(value);
   const diagnostics = new Diagnostics(limits.maxDiagnostics);
   installDocumentRules(parser, diagnostics);
+  parser.core.ruler.before('text_join', 'plain_html', state => adaptPlainHtml(state.tokens, diagnostics, state.Token));
   // Runs after footnote_tail so footnote bodies are joined too.
   parser.core.ruler.push('cjk_line_join', state => joinCjkLines(state.tokens));
   const images: ImageReference[] = [];
@@ -100,5 +129,9 @@ export function parseMarkdown(markdown: string, limits: Limits): ParsedMarkdown 
     }
   };
   walk(tokens);
+  // Layout diagnostics are raised from the HTML; carry block source lines there.
+  for (const token of tokens) {
+    if (token.nesting === 1 && token.map && sourceLineBlocks.has(token.type)) token.attrSet('data-source-line', String(token.map[0] + 1));
+  }
   return { html: parser.renderer.render(tokens, parser.options, env).trimEnd(), images, diagrams, formulas, diagnostics };
 }

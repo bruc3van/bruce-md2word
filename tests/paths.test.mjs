@@ -77,3 +77,16 @@ test('actual read limits hold even when stat reports a smaller file', async () =
     assert.equal(result.error.info.code, 'FS_TOO_LARGE');
   } finally { await h.close(); }
 });
+
+test('default names derived from source files are repaired; explicit names stay strict', async () => {
+  const { defaultOutputName, outputName } = await import('../lib/runtime/paths.js');
+  assert.equal(defaultOutputName('报告:v2'), '报告_v2.docx');
+  assert.equal(defaultOutputName('a?b*c|d'), 'a_b_c_d.docx');
+  assert.equal(defaultOutputName('con'), '_con.docx');
+  assert.equal(defaultOutputName('name. '), 'name.docx');
+  assert.equal(defaultOutputName(''), 'document.docx');
+  const long = defaultOutputName('中'.repeat(200));
+  assert.ok(Buffer.byteLength(long) <= 240 && long.endsWith('.docx'));
+  assert.throws(() => outputName('报告:v2'), { code: 'INVALID_INPUT' });
+  assert.throws(() => outputName('con.docx'), { code: 'INVALID_INPUT' });
+});

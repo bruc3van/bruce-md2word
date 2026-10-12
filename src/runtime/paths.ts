@@ -13,6 +13,14 @@ export function outputName(input: string): string {
   if (Buffer.byteLength(name) > 240) throw new ExportError('fileName is too long.', 'INVALID_INPUT');
   return name;
 }
+/** A default name derived from a source file is repaired, not rejected: the caller never chose it. */
+export function defaultOutputName(base: string): string {
+  let name = base.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim().replace(/[. ]+$/, '');
+  if (/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)) name = `_${name}`;
+  const chars = Array.from(name || 'document');
+  while (Buffer.byteLength(chars.join('') + '.docx') > 240) chars.pop();
+  return outputName(chars.join('').replace(/[. ]+$/, '') || 'document');
+}
 export async function readInput(fs: FileSystem, input: WordExportInput, exec: ToolExecution, config: ResolvedConfig, signal: AbortSignal): Promise<InputData> {
   signal.throwIfAborted();
   const cwd = exec.agent?.session.header.cwd ?? config.workspaceRoot;
@@ -36,7 +44,7 @@ export async function readInput(fs: FileSystem, input: WordExportInput, exec: To
     try { markdown = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
     catch (cause) { throw new FsError('Markdown input must be UTF-8.', 'FS_NOT_TEXT', { cause }); }
     assetBase = path.dirname(absolute);
-    defaultName = path.basename(absolute).replace(/\.(md|markdown)$/i, '') + '.docx';
+    defaultName = defaultOutputName(path.basename(absolute).replace(/\.(md|markdown)$/i, ''));
   } else {
     markdown = input.source.text.replace(/^\uFEFF/, '');
     if (input.source.assetBaseDir !== undefined) {

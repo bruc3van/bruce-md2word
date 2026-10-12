@@ -3,6 +3,8 @@ export interface DocumentOptions {
   preset: 'chinese-report' | 'technical';
   font: string;
   headingFont: string;
+  /** Optional Latin/digit font; empty keeps font/headingFont for all scripts. */
+  latinFont: string;
   fontSize: number;
   lineSpacing: number;
   firstLineIndent: number;
@@ -16,9 +18,13 @@ export interface DocumentOptions {
   headingNumbering: boolean;
 }
 export function documentDefaults(): DocumentOptions {
-  return { preset: 'chinese-report', font: 'SimSun', headingFont: 'SimHei', fontSize: 12,
+  return { preset: 'chinese-report', font: 'SimSun', headingFont: 'SimHei', latinFont: '', fontSize: 12,
     lineSpacing: 1.5, firstLineIndent: 2, margins: { top: 25, bottom: 25, left: 25, right: 25 },
     title: '', header: '', footer: '', pageNumbers: false, toc: false, tocDepth: 3, headingNumbering: false };
+}
+/** Run font: East Asian text keeps its font; Latin text and digits use latinFont when set. */
+export function runFont(eastAsia: string, latin: string): string | { ascii: string; hAnsi: string; cs: string; eastAsia: string } {
+  return latin ? { ascii: latin, hAnsi: latin, cs: latin, eastAsia } : eastAsia;
 }
 export const mmToTwips = (mm: number): number => Math.round(mm * 1440 / 25.4);
 export function parseDocumentOptions(source: string): DocumentOptions {
@@ -36,7 +42,7 @@ export function parseDocumentOptions(source: string): DocumentOptions {
         if (!Object.hasOwn(result.margins, side) || typeof mm !== 'number' || !Number.isFinite(mm) || mm < 10 || mm > 50) throw new Error('Margins must be 10–50 mm.');
         result.margins[side as keyof DocumentOptions['margins']] = mm;
       }
-    } else if (['font', 'headingFont', 'title', 'header', 'footer'].includes(key)) {
+    } else if (['font', 'headingFont', 'latinFont', 'title', 'header', 'footer'].includes(key)) {
       if (typeof value !== 'string' || value.length > 256 || /[\u0000-\u001f]/u.test(value) || (key.endsWith('Font') || key === 'font') && !value.trim()) throw new Error(`Invalid text option: ${key}.`);
       Object.assign(result, { [key]: value });
     } else if (['toc', 'pageNumbers', 'headingNumbering'].includes(key)) {
