@@ -1,3 +1,5 @@
+<img src="assets/icon.svg" alt="bruce-md2word logo：M 与转换箭头" width="96" height="96">
+
 # bruce-md2word
 
 **面向 AI Agent 的 Markdown 转 Word 工具：开箱即用的中文排版、Mermaid 图表转图片、可编辑数学公式。**
@@ -126,7 +128,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.7.0
+npm install -g bruce-md2word@0.7.1
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -139,12 +141,12 @@ npm install -g bruce-md2word@0.7.0
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.7.0 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.7.1 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.7.0
+npm install -g bruce-md2word@0.7.1
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
@@ -161,6 +163,8 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 
 安装时使用 npm 包名或精确版本，不要把 GitHub 说明链接作为 Git 依赖，也不要把 `[文字](URL)` 这样的 Markdown 链接传给安装命令。安装后重启对应 DSH 服务，即可让 Agent 导出 Word，无需另装 CLI 或 Skill。
 
+插件图标随 npm 包内置，通过 `package.json` 的 `icon` 字段和 `./icon` 导出声明，供支持图标的 DSH 插件列表及插件索引生成器读取。
+
 若日志停在 `git ls-remote` 并提示未同意 Xcode 许可，说明安装尚未进入插件加载阶段。npm 包安装不需要从 GitHub 拉取源码；确实需要 Git 源码安装时，应由用户在终端运行 `sudo xcodebuild -license`，阅读并自行决定是否同意许可。
 
 <details>
@@ -169,13 +173,13 @@ CLI 支持文件输入，也支持以 `-` 从标准输入读取 Markdown；正�
 当前包要求 Node.js `^24 || ^26`、DSH 服务包 `>=0.1.7-rc.2 <0.3.0`、Cordis `~4.0.4`。请在目标 DSH 环境中执行，将 `web` 换成实际 profile，并沿用该环境的 `DSH_HOME`。
 
 ```sh
-dsh plugin --profile web add bruce-md2word@0.7.0
+dsh plugin --profile web add bruce-md2word@0.7.1
 ```
 
 如果你的 DSH 通过 `npx` 启动，可使用对应版本的 CLI，例如：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.7.0
+npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add bruce-md2word@0.7.1
 ```
 
 安装后重启对应 profile。默认项目模式需要 DSH 的 `tools` 与 `shell` 服务就绪，才会注册 `word_export`。版本来源见 [npm 包](https://www.npmjs.com/package/bruce-md2word)，服务依赖见 [运行参考](docs/agent-reference.md#环境与工具注册)。
