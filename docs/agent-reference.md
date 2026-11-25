@@ -118,7 +118,7 @@
 
 数值配置均为安全整数：`queueSize` 允许 0，其他字段至少为 1；`timeoutMs` 不超过 2147483647。配置 Schema 同时提供范围、步长和字段说明，加载时还会检查绝对路径与 CLI 命令。
 
-项目模式通过 `ctx.shell` 执行 CLI，传入会话工作目录、取消信号和当前沙箱策略；正文、路径及转换参数通过标准输入 JSON 传递，不拼接为 shell 命令。转换在运行 DSH 的本机完成。默认使用包内 CLI 和 DSH 的 Node 运行时，不引入远程转换服务。
+项目模式通过 `ctx.shell` 执行 CLI，传入会话工作目录、取消信号和当前沙箱策略；正文、路径及转换参数通过标准输入 JSON 传递，不拼接为 shell 命令。转换在运行 DSH 的本机完成，不引入远程转换服务。纯 Node 宿主用当前进程的 Node 运行包内 CLI；Electron 宿主（如 DSH Desktop）优先使用 PATH 上满足 Node 24/26 的 `node`（系统安装的 Node 或桌面端的 `node` shim），没有可用候选时以 `ELECTRON_RUN_AS_NODE=1` 启动宿主可执行文件（可用 `DSH_NODE_EXECUTABLE` 覆盖）。因此 Electron 宿主上的导出取决于 PATH 上 Node 的版本，请保持其为 Node 24 或 26。
 
 CLI 在执行环境中读取文件、运行转换 worker，完成写入后才原子发布 DOCX；不覆盖文件，需要文件系统支持硬链接。拒绝符号链接输出目录。插件不直接使用宿主 Node 文件 API 写入项目。沙箱执行失败不会自动退回无沙箱执行。
 

@@ -1,3 +1,9 @@
+# v0.7.2
+
+- 修复 DSH Desktop（Electron 宿主）下 `word_export` 报「CLI returned invalid JSON」：插件此前用 `process.execPath` 启动包内 CLI，在桌面端这是 GUI 可执行文件，只会打开应用并返回空 stdout。现在 Electron 宿主优先使用 PATH 上的 `node`（系统安装的 Node 或桌面端的 `node` shim），并跳过版本不满足 `engines`（24/26）的候选；没有可用候选时，以 `ELECTRON_RUN_AS_NODE=1` 启动宿主可执行文件（可用 `DSH_NODE_EXECUTABLE` 覆盖）。纯 Node 宿主行为不变。
+- 因此 Electron 宿主下的导出改为经过 PATH 上的 Node，请确保其版本满足 Node 24 或 26；PATH 解析会跳过目录、带引号或相对路径的条目，避免误选。
+- 新增回归测试：PATH 中的同名目录、带引号/空格/相对条目、多目录优先级、版本过滤，以及一条真实 shell 下 `--request` 与 stdin 的端到端用例。
+
 # v0.7.1
 
 - 新增单色 M 与转换箭头组成的 SVG 插件 logo，随 npm 包分发，并通过 `icon` 字段及 `./icon` 导出供 DSH 读取。

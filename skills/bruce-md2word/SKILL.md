@@ -1,7 +1,7 @@
 ---
 name: bruce-md2word
 slug: bruce-md2word
-version: 0.7.1
+version: 0.7.2
 displayName: Markdown 转 Word
 summary: 将 Markdown、报告和方案导出为 Word，支持中文排版、Mermaid 图表和可编辑数学公式；需要 Node.js 24 或 26。
 license: MIT

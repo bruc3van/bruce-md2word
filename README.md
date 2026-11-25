@@ -128,7 +128,7 @@ npx skills add bruc3van/bruce-md2word --skill bruce-md2word
 如果希望提前准备 CLI，也可以手动安装：
 
 ```sh
-npm install -g bruce-md2word@0.7.1
+npm install -g bruce-md2word@0.7.2
 ```
 
 也可以直接让 Agent 帮你完成：
@@ -141,12 +141,12 @@ npm install -g bruce-md2word@0.7.1
 
 独立 CLI 可用于 DSH 之外的环境。给 Agent 的安装与使用指令：
 
-> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.7.1 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
+> 请检查 Node.js 是否为 24 或 26，然后安装 bruce-md2word@0.7.2 的独立 CLI，将 docs/报告.md 严格导出为 Word。读取命令返回的 JSON，告诉我真实输出路径和警告；失败时说明错误码和原因。
 
 对应命令：
 
 ```sh
-npm install -g bruce-md2word@0.7.1
+npm install -g bruce-md2word@0.7.2
 bruce-md2word docs/报告.md --strict -o output/项目报告.docx
 bruce-md2word --help
 ```
